@@ -2,7 +2,7 @@
 
 Première base de l'application décrite dans la [spécification fonctionnelle](Petassos_Travel_Map_FINAL_Specification_v5.md). Le frontend React est dans `frontend/` et l'API FastAPI dans `backend/`.
 
-À ce stade, l'interface affiche une page de test et vérifie la connexion à l'API. La carte, l'authentification et la base de données viendront ensuite.
+L'interface Admin comprend la connexion, la carte de Crète et la gestion des lieux et des notes. L'onglet Zones et les fonctions de partage restent à développer.
 
 ## Prérequis
 
@@ -17,6 +17,7 @@ Depuis la racine du projet :
 cd backend
 python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python setup_admin.py
 ```
 
 Dans un autre terminal, toujours depuis la racine du projet :
@@ -42,6 +43,18 @@ cd frontend
 npm run dev
 ```
 
-Ouvrir <http://127.0.0.1:5173>. La page doit afficher **FastAPI connection: Connected**. L'API peut aussi être vérifiée sur <http://127.0.0.1:8000/api/health> : elle répond `{"status":"ok"}`.
+Ouvrir <http://127.0.0.1:5173>. La page de connexion Admin s'affiche. Une fois connecté, la carte de Crète apparaît. Les onglets Places / Notes / Zones changent le panneau sans recharger la carte ; le menu Admin permet de se déconnecter. La carte utilise des tuiles en ligne et nécessite une connexion Internet.
 
-En développement, Vite transmet les requêtes `/api` au backend sur le port 8000. Le fichier `.env.example` documente des paramètres prévus pour les étapes suivantes ; ils ne sont pas encore utilisés.
+L'API peut aussi être vérifiée sur <http://127.0.0.1:8000/api/health> : elle répond `{"status":"ok"}`.
+
+Le script `setup_admin.py` demande un identifiant et un mot de passe, puis crée `../.env` avec un hash du mot de passe et un secret de session. Ce fichier est ignoré par Git. Il faut le créer avant le premier démarrage du backend. En production HTTPS, régler `SESSION_COOKIE_SECURE=true`.
+
+Pour changer le mot de passe Admin, depuis `backend/` :
+
+```bash
+.venv/bin/python change_password.py
+```
+
+Le script demande l'ancien et le nouveau mot de passe (5 caractères minimum), puis remplace le secret de session. Redémarrer le backend ensuite ; les anciennes sessions seront invalidées.
+
+Les routes `/api/admin/login`, `/api/admin/session` et `/api/admin/logout` peuvent aussi être essayées dans <http://127.0.0.1:8000/docs>. En développement, Vite transmet les requêtes `/api` au backend sur le port 8000.
