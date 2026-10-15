@@ -7,6 +7,7 @@ import petassosStyle from './assets/petassos-style.json';
 import brightStyle from './assets/bright-style.json';
 import seaTextureUrl from './assets/petassos-sea.png';
 import { categoryIconUrl, placeMarkerUrl, noteMarkerUrl } from './markerIcons.js';
+import { searchLocations } from './geocoder.js';
 
 setWorkerUrl(workerUrl);
 
@@ -32,7 +33,7 @@ async function addPlaceImages(map, places) {
   }));
 }
 
-function recordsGeoJSON(places, notes, selectedRecord, editingRecord) {
+function recordsGeoJSON(places, notes, selectedRecord, editingRecord, hoveredRecord = null) {
   return {
     type: 'FeatureCollection',
     features: [...places, ...notes].filter((record) => (
@@ -45,40 +46,121 @@ function recordsGeoJSON(places, notes, selectedRecord, editingRecord) {
         kind: record.kind,
         image: record.kind === 'NOTE' ? 'petassos-note' : placeMarkerId(record),
         selected: selectedRecord?.kind === record.kind && selectedRecord.id === record.id,
+        hovered: hoveredRecord?.kind === record.kind && hoveredRecord.id === record.id,
       },
     })),
   };
 }
 
-export default function MapView({ mapAction, places, notes, categories, hiddenCategoryIds, notesVisible, onToggleCategory, onToggleNotes, onShowAll, onHideAll, picking, draftKind, draftLocation, editingRecord, editingCategory, selectedRecord, onPickLocation, onMoveDraftLocation, onSelectRecord, onDeselectRecord, onViewportChange }) {
+function hasZoneBounds(zone) {
+  return Boolean(zone && [zone.min_lat, zone.max_lat, zone.min_lon, zone.max_lon].every(Number.isFinite));
+}
+
+function zoneArea(zone) {
+  return (zone.max_lat - zone.min_lat) * (zone.max_lon - zone.min_lon);
+}
+
+function containsPoint(zone, { lat, lng }) {
+  return zone.min_lat <= lat && lat <= zone.max_lat && zone.min_lon <= lng && lng <= zone.max_lon;
+}
+
+function zoneLabelColor(hoveredId = null) {
+  const normal = ['case', ['get', 'draft'], '#bd3d38', ['get', 'selected'], '#916111', '#a0a9ae'];
+  return hoveredId === null ? normal : ['case', ['==', ['get', 'id'], hoveredId], '#427c8b', normal];
+}
+
+function zoneFeature(zone, selected, active, draft = false) {
+  const { min_lat: south, max_lat: north, min_lon: west, max_lon: east } = zone;
+  return {
+    type: 'Feature',
+    geometry: { type: 'Polygon', coordinates: [[[west, south], [east, south], [east, north], [west, north], [west, south]]] },
+    properties: { id: zone.id ?? 0, selected, active, draft },
+  };
+}
+
+function zonesGeoJSON(mode, zones, selectedZoneId, zoneDraft) {
+  const active = mode === 'Zones';
+  const visibleZones = zones.filter((zone) => zone.id !== zoneDraft?.id && hasZoneBounds(zone))
+    .sort((left, right) => zoneArea(right) - zoneArea(left) || left.id - right.id);
+  if (active && hasZoneBounds(zoneDraft)) visibleZones.push(zoneDraft);
+  return {
+    type: 'FeatureCollection',
+    features: [
+      ...visibleZones.map((zone) => zoneFeature(zone, zone === zoneDraft || zone.id === selectedZoneId, active, zone === zoneDraft)),
+      ...visibleZones.filter((zone) => zone.name?.trim()).map((zone) => ({
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [zone.min_lon, zone.max_lat] },
+        properties: { id: zone.id ?? 0, name: zone.name, active, selected: zone === zoneDraft || zone.id === selectedZoneId, draft: zone === zoneDraft },
+      })),
+    ],
+  };
+}
+
+function rectangleBounds(first, second) {
+  const bounds = {
+    min_lat: Math.min(first.lat, second.lat), max_lat: Math.max(first.lat, second.lat),
+    min_lon: Math.min(first.lng, second.lng), max_lon: Math.max(first.lng, second.lng),
+  };
+  return bounds.max_lat - bounds.min_lat > 0.00001 && bounds.max_lon - bounds.min_lon > 0.00001 ? bounds : null;
+}
+
+function clamp(value, minimum, maximum) {
+  return Math.min(maximum, Math.max(minimum, value));
+}
+
+export default function MapView({ mapAction, mode, places, notes, zones, selectedZoneId, zoneDraft, categories, hiddenCategoryIds, notesVisible, onToggleCategory, onToggleNotes, onShowAll, onHideAll, picking, draftKind, draftLocation, editingRecord, editingCategory, selectedRecord, onPickLocation, onMoveDraftLocation, onSelectRecord, onDeselectRecord, onSelectZone, onDeselectZone, onZoneBoundsChange, onZoneDrawingChange, onViewportChange }) {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
   const draftMarkerRef = useRef(null);
+  const zoneHandlesRef = useRef([]);
+  const zoneAnchorRef = useRef(null);
   const selectedStyleRef = useRef('bright');
   const placesRef = useRef(places);
   const notesRef = useRef(notes);
   const selectedRecordRef = useRef(selectedRecord);
   const editingRecordRef = useRef(editingRecord);
+  const hoveredRecordRef = useRef(null);
+  const modeRef = useRef(mode);
+  const zonesRef = useRef(zones);
+  const selectedZoneIdRef = useRef(selectedZoneId);
+  const zoneDraftRef = useRef(zoneDraft);
   const pickingRef = useRef(picking);
   const onPickLocationRef = useRef(onPickLocation);
   const onMoveDraftLocationRef = useRef(onMoveDraftLocation);
   const onSelectRecordRef = useRef(onSelectRecord);
   const onDeselectRecordRef = useRef(onDeselectRecord);
+  const onSelectZoneRef = useRef(onSelectZone);
+  const onDeselectZoneRef = useRef(onDeselectZone);
+  const onZoneBoundsChangeRef = useRef(onZoneBoundsChange);
+  const onZoneDrawingChangeRef = useRef(onZoneDrawingChange);
   const onViewportChangeRef = useRef(onViewportChange);
+  const geoRequestRef = useRef(null);
   const [selectedStyle, setSelectedStyle] = useState('bright');
   const [styleMenuOpen, setStyleMenuOpen] = useState(false);
   const [visibilityOpen, setVisibilityOpen] = useState(false);
   const [mapError, setMapError] = useState('');
+  const [geoQuery, setGeoQuery] = useState('');
+  const [geoResults, setGeoResults] = useState(null);
+  const [geoBusy, setGeoBusy] = useState(false);
+  const [geoError, setGeoError] = useState('');
 
   placesRef.current = places;
   notesRef.current = notes;
   selectedRecordRef.current = selectedRecord;
   editingRecordRef.current = editingRecord;
+  modeRef.current = mode;
+  zonesRef.current = zones;
+  selectedZoneIdRef.current = selectedZoneId;
+  zoneDraftRef.current = zoneDraft;
   pickingRef.current = picking;
   onPickLocationRef.current = onPickLocation;
   onMoveDraftLocationRef.current = onMoveDraftLocation;
   onSelectRecordRef.current = onSelectRecord;
   onDeselectRecordRef.current = onDeselectRecord;
+  onSelectZoneRef.current = onSelectZone;
+  onDeselectZoneRef.current = onDeselectZone;
+  onZoneBoundsChangeRef.current = onZoneBoundsChange;
+  onZoneDrawingChangeRef.current = onZoneDrawingChange;
   onViewportChangeRef.current = onViewportChange;
 
   useEffect(() => {
@@ -86,10 +168,72 @@ export default function MapView({ mapAction, places, notes, categories, hiddenCa
     if (!map?.getLayer('admin-record-icons')) return undefined;
     let cancelled = false;
     addPlaceImages(map, places).then(() => {
-      if (!cancelled) map.getSource('admin-records')?.setData(recordsGeoJSON(places, notes, selectedRecord, editingRecord));
+      if (!cancelled) map.getSource('admin-records')?.setData(recordsGeoJSON(places, notes, selectedRecord, editingRecord, hoveredRecordRef.current));
     }).catch(() => setMapError('Marker icons could not load.'));
     return () => { cancelled = true; };
   }, [places, notes, selectedRecord, editingRecord]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    map?.getSource('admin-zones')?.setData(zonesGeoJSON(mode, zones, selectedZoneId, zoneDraft));
+    if ((mode !== 'Zones' || zoneDraft) && hoveredRecordRef.current) {
+      hoveredRecordRef.current = null;
+      map?.getSource('admin-records')?.setData(recordsGeoJSON(places, notes, selectedRecord, editingRecord));
+    }
+    if (map?.getLayer('admin-record-icons')) {
+      map.setPaintProperty('admin-record-icons', 'icon-opacity', mode === 'Zones' ? ['case', ['get', 'hovered'], 1, 0.4] : 1);
+    }
+  }, [mode, zones, selectedZoneId, zoneDraft]);
+
+  useEffect(() => {
+    if (!zoneDraft) zoneAnchorRef.current = null;
+  }, [zoneDraft]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || mode !== 'Zones' || !hasZoneBounds(zoneDraft) || zoneAnchorRef.current) {
+      zoneHandlesRef.current.forEach(({ marker }) => marker.remove());
+      zoneHandlesRef.current = [];
+      return;
+    }
+    const corners = {
+      nw: [zoneDraft.min_lon, zoneDraft.max_lat],
+      ne: [zoneDraft.max_lon, zoneDraft.max_lat],
+      sw: [zoneDraft.min_lon, zoneDraft.min_lat],
+      se: [zoneDraft.max_lon, zoneDraft.min_lat],
+      center: [(zoneDraft.min_lon + zoneDraft.max_lon) / 2, (zoneDraft.min_lat + zoneDraft.max_lat) / 2],
+    };
+    if (!zoneHandlesRef.current.length) {
+      zoneHandlesRef.current = Object.keys(corners).map((corner) => {
+        const element = document.createElement('div');
+        element.className = `zone-handle${corner === 'center' ? ' zone-move-handle' : ''}`;
+        element.title = corner === 'center' ? 'Drag to move zone' : 'Drag to resize zone';
+        const marker = new Marker({ element, draggable: true }).setLngLat(corners[corner]).addTo(map);
+        marker.on('drag', () => {
+          const current = zoneDraftRef.current;
+          if (!hasZoneBounds(current)) return;
+          const { lat, lng } = marker.getLngLat();
+          if (corner === 'center') {
+            const deltaLat = clamp(lat - (current.min_lat + current.max_lat) / 2, -90 - current.min_lat, 90 - current.max_lat);
+            const deltaLon = clamp(lng - (current.min_lon + current.max_lon) / 2, -180 - current.min_lon, 180 - current.max_lon);
+            onZoneBoundsChangeRef.current({
+              min_lat: current.min_lat + deltaLat, max_lat: current.max_lat + deltaLat,
+              min_lon: current.min_lon + deltaLon, max_lon: current.max_lon + deltaLon,
+            });
+          } else {
+            onZoneBoundsChangeRef.current({
+              min_lat: corner.includes('s') ? clamp(lat, -90, current.max_lat - 0.00001) : current.min_lat,
+              max_lat: corner.includes('n') ? clamp(lat, current.min_lat + 0.00001, 90) : current.max_lat,
+              min_lon: corner.includes('w') ? clamp(lng, -180, current.max_lon - 0.00001) : current.min_lon,
+              max_lon: corner.includes('e') ? clamp(lng, current.min_lon + 0.00001, 180) : current.max_lon,
+            });
+          }
+        });
+        return { corner, marker };
+      });
+    }
+    zoneHandlesRef.current.forEach(({ corner, marker }) => marker.setLngLat(corners[corner]));
+  }, [mode, zoneDraft]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -132,8 +276,8 @@ export default function MapView({ mapAction, places, notes, categories, hiddenCa
   }, [draftKind, draftLocation, editingRecord, editingCategory]);
 
   useEffect(() => {
-    if (mapRef.current) mapRef.current.getCanvas().style.cursor = picking ? 'crosshair' : '';
-  }, [picking]);
+    if (mapRef.current) mapRef.current.getCanvas().style.cursor = picking || (mode === 'Zones' && zoneDraft && (!hasZoneBounds(zoneDraft) || zoneAnchorRef.current)) ? 'crosshair' : '';
+  }, [picking, mode, zoneDraft]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -146,6 +290,17 @@ export default function MapView({ mapAction, places, notes, categories, hiddenCa
         center: [longitude, latitude],
         zoom: Math.max(map.getZoom(), 10),
         offset: mobile ? [0, -Math.min(140, height * 0.2)] : [Math.min(170, width * 0.2), 0],
+        duration: 650,
+      });
+    } else if (mapAction.type === 'zone') {
+      const zone = mapAction.zone;
+      map.fitBounds([[zone.min_lon, zone.min_lat], [zone.max_lon, zone.max_lat]], {
+        padding: {
+          top: 55, right: 55,
+          bottom: mobile ? Math.min(420, height * 0.6) : 55,
+          left: mobile ? 55 : Math.min(390, width * 0.4),
+        },
+        maxZoom: 12,
         duration: 650,
       });
     } else if (mapAction.type === 'fit' && mapAction.records.length) {
@@ -179,6 +334,7 @@ export default function MapView({ mapAction, places, notes, categories, hiddenCa
     if (!containerRef.current) return undefined;
 
     let map;
+    let hoveredZoneId = null;
     try {
       map = new Map({
         container: containerRef.current,
@@ -188,6 +344,11 @@ export default function MapView({ mapAction, places, notes, categories, hiddenCa
         attributionControl: true,
       });
       mapRef.current = map;
+      if (window.matchMedia('(max-width: 700px)').matches) {
+        const attribution = map.getContainer().querySelector('.maplibregl-ctrl-attrib');
+        attribution?.classList.remove('maplibregl-compact-show');
+        attribution?.removeAttribute('open');
+      }
       map.addControl(new NavigationControl({ showCompass: false }), 'top-right');
       const updateViewport = () => {
         const bounds = map.getBounds();
@@ -198,23 +359,137 @@ export default function MapView({ mapAction, places, notes, categories, hiddenCa
       };
       map.on('load', updateViewport);
       map.on('moveend', updateViewport);
+      map.on('mousemove', (event) => {
+        if (zoneAnchorRef.current) {
+          const bounds = rectangleBounds(zoneAnchorRef.current, event.lngLat);
+          if (bounds) onZoneBoundsChangeRef.current(bounds);
+        }
+        const canHover = !pickingRef.current && !(modeRef.current === 'Zones' && zoneDraftRef.current);
+        const marker = canHover && modeRef.current === 'Zones' && map.getLayer('admin-record-icons')
+          ? map.queryRenderedFeatures(event.point, { layers: ['admin-record-icons'] })[0]
+          : null;
+        const hoveredRecord = marker ? { kind: marker.properties.kind, id: Number(marker.properties.id) } : null;
+        const previousRecord = hoveredRecordRef.current;
+        if (hoveredRecord?.kind !== previousRecord?.kind || hoveredRecord?.id !== previousRecord?.id) {
+          hoveredRecordRef.current = hoveredRecord;
+          map.getSource('admin-records')?.setData(recordsGeoJSON(
+            placesRef.current, notesRef.current, selectedRecordRef.current, editingRecordRef.current, hoveredRecord,
+          ));
+        }
+        const label = canHover && map.getLayer('admin-zones-labels')
+          ? map.queryRenderedFeatures(event.point, { layers: ['admin-zones-labels'] })[0]
+          : null;
+        const zoneId = label ? Number(label.properties.id) : null;
+        if (zoneId !== hoveredZoneId) {
+          hoveredZoneId = zoneId;
+          if (map.getLayer('admin-zones-labels')) map.setPaintProperty('admin-zones-labels', 'text-color', zoneLabelColor(zoneId));
+        }
+        if (canHover) map.getCanvas().style.cursor = marker || label ? 'pointer' : '';
+      });
+      map.on('mouseout', () => {
+        if (hoveredRecordRef.current) {
+          hoveredRecordRef.current = null;
+          map.getSource('admin-records')?.setData(recordsGeoJSON(
+            placesRef.current, notesRef.current, selectedRecordRef.current, editingRecordRef.current,
+          ));
+        }
+        if (hoveredZoneId !== null) {
+          hoveredZoneId = null;
+          if (map.getLayer('admin-zones-labels')) map.setPaintProperty('admin-zones-labels', 'text-color', zoneLabelColor());
+        }
+      });
       map.on('click', (event) => {
         if (pickingRef.current) {
           onPickLocationRef.current({ latitude: event.lngLat.lat, longitude: event.lngLat.lng });
           return;
         }
+        if (modeRef.current === 'Zones' && zoneDraftRef.current && (zoneAnchorRef.current || !hasZoneBounds(zoneDraftRef.current))) {
+          if (!zoneAnchorRef.current) {
+            zoneAnchorRef.current = event.lngLat;
+            onZoneDrawingChangeRef.current(true);
+          } else {
+            const bounds = rectangleBounds(zoneAnchorRef.current, event.lngLat);
+            if (bounds) {
+              onZoneBoundsChangeRef.current(bounds);
+              zoneAnchorRef.current = null;
+              onZoneDrawingChangeRef.current(false);
+            }
+          }
+          return;
+        }
         const feature = map.getLayer('admin-record-icons')
           ? map.queryRenderedFeatures(event.point, { layers: ['admin-record-icons'] })[0]
           : null;
-        if (feature) onSelectRecordRef.current({ kind: feature.properties.kind, id: Number(feature.properties.id) });
-        else onDeselectRecordRef.current();
+        if (feature) {
+          onSelectRecordRef.current({ kind: feature.properties.kind, id: Number(feature.properties.id) });
+          return;
+        }
+        const label = map.getLayer('admin-zones-labels')
+          ? map.queryRenderedFeatures(event.point, { layers: ['admin-zones-labels'] })[0]
+          : null;
+        if (label) {
+          if (!zoneDraftRef.current) onSelectZoneRef.current(Number(label.properties.id));
+          return;
+        }
+        if (modeRef.current === 'Zones') {
+          const draft = zoneDraftRef.current;
+          if (hasZoneBounds(draft) && containsPoint(draft, event.lngLat)) return;
+          const zone = zonesRef.current
+            .filter((item) => item.id !== draft?.id && hasZoneBounds(item) && containsPoint(item, event.lngLat))
+            .reduce((top, item) => !top || zoneArea(item) < zoneArea(top) ||
+              (zoneArea(item) === zoneArea(top) && item.id > top.id) ? item : top, null);
+          if (zone) {
+            if (!draft) onSelectZoneRef.current(zone.id);
+            return;
+          }
+        }
+        onDeselectRecordRef.current();
+        onDeselectZoneRef.current();
       });
       let styleLoadId = 0;
       map.on('style.load', async () => {
         const currentLoadId = ++styleLoadId;
+        hoveredZoneId = null;
         map.addSource('admin-records', {
           type: 'geojson',
           data: { type: 'FeatureCollection', features: [] },
+        });
+        map.addSource('admin-zones', {
+          type: 'geojson',
+          data: zonesGeoJSON(modeRef.current, zonesRef.current, selectedZoneIdRef.current, zoneDraftRef.current),
+        });
+        map.addLayer({
+          id: 'admin-zones-fill', type: 'fill', source: 'admin-zones',
+          paint: {
+            'fill-color': ['case', ['get', 'draft'], '#de5d55', ['get', 'selected'], '#e2a93b', '#43b6cc'],
+            'fill-opacity': ['case', ['get', 'active'], ['case', ['get', 'selected'], 0.22, 0.12], 0],
+          },
+        });
+        map.addLayer({
+          id: 'admin-zones-outline', type: 'line', source: 'admin-zones',
+          paint: {
+            'line-color': ['case', ['get', 'draft'], '#bd3d38', ['get', 'selected'], '#b77c15', '#a9b1b5'],
+            'line-width': ['case', ['get', 'selected'], 2.5, 1],
+            'line-opacity': 0.85,
+          },
+        });
+        map.addLayer({
+          id: 'admin-zones-labels', type: 'symbol', source: 'admin-zones',
+          filter: ['==', ['geometry-type'], 'Point'],
+          layout: {
+            'text-field': ['get', 'name'],
+            'text-font': ['Noto Sans Bold'],
+            'text-size': 11,
+            'text-anchor': 'bottom-left',
+            'text-offset': [0.25, -0.1],
+            'text-max-width': 12,
+          },
+          paint: {
+            'text-color': zoneLabelColor(),
+            'text-opacity': 0.9,
+            'text-halo-color': '#ffffff',
+            'text-halo-width': 0.75,
+          },
         });
         if (selectedStyleRef.current === 'petassos') {
           try {
@@ -239,14 +514,17 @@ export default function MapView({ mapAction, places, notes, categories, hiddenCa
             layout: {
               'icon-image': ['get', 'image'],
               'icon-size': ['case', ['get', 'selected'],
-                ['case', ['==', ['get', 'kind'], 'NOTE'], 1.45, 44 / 31], 1],
-              'symbol-sort-key': ['case', ['get', 'selected'], 1, 0],
+                ['case', ['==', ['get', 'kind'], 'NOTE'], 1.45, 44 / 31], ['get', 'hovered'], 1.15, 1],
+              'symbol-sort-key': ['case', ['get', 'selected'], 2, ['get', 'hovered'], 1, 0],
               'icon-allow-overlap': true,
               'icon-ignore-placement': true,
             },
+            paint: {
+              'icon-opacity': modeRef.current === 'Zones' ? ['case', ['get', 'hovered'], 1, 0.4] : 1,
+            },
           });
           map.getSource('admin-records').setData(recordsGeoJSON(
-            placesRef.current, notesRef.current, selectedRecordRef.current, editingRecordRef.current,
+            placesRef.current, notesRef.current, selectedRecordRef.current, editingRecordRef.current, hoveredRecordRef.current,
           ));
         } catch {
           setMapError('Marker icons could not load.');
@@ -257,12 +535,61 @@ export default function MapView({ mapAction, places, notes, categories, hiddenCa
     }
 
     return () => {
+      geoRequestRef.current?.abort();
       draftMarkerRef.current?.remove();
       draftMarkerRef.current = null;
+      zoneHandlesRef.current.forEach(({ marker }) => marker.remove());
+      zoneHandlesRef.current = [];
       mapRef.current = null;
       map?.remove();
     };
   }, []);
+
+  async function submitGeoSearch(event) {
+    event.preventDefault();
+    if (!geoQuery.trim() || geoBusy) return;
+    const controller = new AbortController();
+    geoRequestRef.current = controller;
+    setGeoBusy(true);
+    setGeoResults(null);
+    setGeoError('');
+    try {
+      setGeoResults(await searchLocations(geoQuery, controller.signal));
+    } catch (error) {
+      if (error.name !== 'AbortError') setGeoError('Location search is unavailable. Please try again.');
+    } finally {
+      if (geoRequestRef.current === controller) {
+        geoRequestRef.current = null;
+        setGeoBusy(false);
+      }
+    }
+  }
+
+  function chooseGeoResult(result) {
+    const map = mapRef.current;
+    if (!map) return;
+    const { clientWidth: width, clientHeight: height } = map.getContainer();
+    const mobile = width <= 700;
+    const sheetHeight = mobile ? map.getContainer().closest('.admin-main')?.querySelector('.work-panel')?.offsetHeight ?? 0 : 0;
+    if (result.boundingBox) {
+      map.fitBounds(result.boundingBox, {
+        padding: mobile
+          ? { top: 35, right: 35, bottom: Math.min(sheetHeight + 25, height * 0.68), left: 35 }
+          : { top: 45, right: 45, bottom: 45, left: Math.min(390, width * 0.45) },
+        maxZoom: 14,
+        duration: 650,
+      });
+    } else {
+      map.easeTo({
+        center: [result.longitude, result.latitude],
+        zoom: Math.max(map.getZoom(), 12),
+        offset: mobile ? [0, -Math.min(sheetHeight / 2, height * 0.35)] : [Math.min(170, width * 0.2), 0],
+        duration: 650,
+      });
+    }
+    setGeoQuery(result.label);
+    setGeoResults(null);
+  }
 
   function chooseStyle(style) {
     setStyleMenuOpen(false);
@@ -276,6 +603,28 @@ export default function MapView({ mapAction, places, notes, categories, hiddenCa
   return (
     <div className="map-area">
       <div className="map-canvas" ref={containerRef} aria-label="Interactive map of Crete" />
+      <form className="geo-search" role="search" aria-label="Search a geographic location" onSubmit={submitGeoSearch}>
+        <input
+          type="search"
+          aria-label="City or address"
+          placeholder="Search a city or address"
+          value={geoQuery}
+          onChange={(event) => {
+            geoRequestRef.current?.abort();
+            setGeoQuery(event.target.value);
+            setGeoResults(null);
+            setGeoError('');
+          }}
+          onKeyDown={(event) => { if (event.key === 'Escape') setGeoResults(null); }}
+        />
+        <button type="submit" disabled={!geoQuery.trim() || geoBusy}>{geoBusy ? 'Searching…' : 'Search'}</button>
+        {(geoResults !== null || geoError) && <div className="geo-search-results" aria-live="polite">
+          {geoError ? <p>{geoError}</p> : geoResults.length ? geoResults.map((result, index) => (
+            <button key={`${result.latitude}-${result.longitude}-${index}`} type="button" onClick={() => chooseGeoResult(result)}>{result.label}</button>
+          )) : <p>No location found.</p>}
+          <small>Search data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a></small>
+        </div>}
+      </form>
       <div className="map-visibility-picker">
         {visibilityOpen && <div className="map-visibility-panel" id="map-visibility-options" aria-label="Map marker visibility">
           <strong>Show on map</strong>

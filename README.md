@@ -2,7 +2,7 @@
 
 Première base de l'application décrite dans la [spécification fonctionnelle](Petassos_Travel_Map_FINAL_Specification_v5.md). Le frontend React est dans `frontend/` et l'API FastAPI dans `backend/`.
 
-L'interface Admin comprend la connexion, la carte de Crète et la gestion des lieux et des notes. L'onglet Zones et les fonctions de partage restent à développer.
+L'interface Admin comprend la connexion, la carte de Crète et la gestion des lieux, des notes, de leurs images et des zones rectangulaires. Les fonctions de partage restent à développer.
 
 ## Prérequis
 

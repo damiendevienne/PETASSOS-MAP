@@ -19,6 +19,8 @@ if __package__:
         session_is_valid,
     )
     from .database import connect_database, initialize_database
+    from .images import router as images_router, remove_record_files
+    from .zones import router as zones_router
 else:
     from auth import (
         COOKIE_NAME,
@@ -32,6 +34,8 @@ else:
         session_is_valid,
     )
     from database import connect_database, initialize_database
+    from images import router as images_router, remove_record_files
+    from zones import router as zones_router
 
 
 @asynccontextmanager
@@ -116,7 +120,8 @@ def _records(kind: str) -> list[dict]:
             "SELECT places.id, places.kind, places.name, places.description, places.author, "
             "places.latitude, places.longitude, places.published, places.category_id, "
             "categories.name AS category_name, categories.color AS category_color, "
-            "categories.icon AS category_icon "
+            "categories.icon AS category_icon, "
+            "(SELECT id FROM place_images WHERE place_id = places.id ORDER BY sort_order LIMIT 1) AS cover_image_id "
             "FROM places LEFT JOIN categories ON categories.id = places.category_id "
             "WHERE places.kind = ? ORDER BY places.id DESC", (kind,)
         ).fetchall()
@@ -163,7 +168,8 @@ def _save_record(kind: str, record: NewRecord, record_id: int | None = None) -> 
             "SELECT places.id, places.kind, places.name, places.description, places.author, "
             "places.latitude, places.longitude, places.published, places.category_id, "
             "categories.name AS category_name, categories.color AS category_color, "
-            "categories.icon AS category_icon "
+            "categories.icon AS category_icon, "
+            "(SELECT id FROM place_images WHERE place_id = places.id ORDER BY sort_order LIMIT 1) AS cover_image_id "
             "FROM places LEFT JOIN categories ON categories.id = places.category_id "
             "WHERE places.id = ?", (record_id,)
         ).fetchone()
@@ -172,11 +178,15 @@ def _save_record(kind: str, record: NewRecord, record_id: int | None = None) -> 
 
 def _delete_record(kind: str, record_id: int) -> None:
     with closing(connect_database()) as connection, connection:
+        filenames = [row["file_path"] for row in connection.execute(
+            "SELECT file_path FROM place_images WHERE place_id = ?", (record_id,)
+        ).fetchall()]
         cursor = connection.execute(
             "DELETE FROM places WHERE id = ? AND kind = ?", (record_id, kind)
         )
         if cursor.rowcount == 0:
             raise HTTPException(status_code=404, detail="Record not found")
+    remove_record_files(filenames)
 
 
 @admin_router.get("/places")
@@ -236,4 +246,6 @@ def admin_logout(
     response.headers["Cache-Control"] = "no-store"
 
 
+admin_router.include_router(images_router)
+admin_router.include_router(zones_router)
 app.include_router(admin_router)

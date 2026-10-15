@@ -178,7 +178,23 @@ def _migration_3(connection: sqlite3.Connection) -> None:
     connection.execute("DELETE FROM categories WHERE id > 4")
 
 
-MIGRATIONS = (_migration_1, _migration_2, _migration_3)
+def _migration_4(connection: sqlite3.Connection) -> None:
+    """Give existing zones distinct names, then enforce that rule for new data."""
+    used = set()
+    for row in connection.execute("SELECT id, name FROM zones ORDER BY id").fetchall():
+        base = row["name"].strip()
+        name = base
+        suffix = 2
+        while name.casefold() in used:
+            name = f"{base} ({suffix})"
+            suffix += 1
+        if name != row["name"]:
+            connection.execute("UPDATE zones SET name = ? WHERE id = ?", (name, row["id"]))
+        used.add(name.casefold())
+    connection.execute("CREATE UNIQUE INDEX zones_name_unique_idx ON zones(lower(trim(name)))")
+
+
+MIGRATIONS = (_migration_1, _migration_2, _migration_3, _migration_4)
 
 
 def initialize_database(path: Path | None = None) -> Path:

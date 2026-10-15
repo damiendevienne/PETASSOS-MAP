@@ -566,6 +566,10 @@ One shared Admin account is sufficient.
 
 No named staff accounts or roles are required initially.
 
+Several people may use the shared account in separate sessions at the same time. Signing in or out in one browser must not invalidate another browser's session. Changes made by one Admin do not need to appear live in other open browsers in the first version; those browsers may need to refresh.
+
+Before routine simultaneous editing, add conflict detection for records changed since an editor opened them. A stale save must not silently overwrite someone else's changes; show a clear choice to reload or review the conflict. Separate named accounts and live synchronization can be considered later.
+
 Recommended configuration:
 
 ```text

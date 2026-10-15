@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import petassosLogo from './assets/petassos-logo-animated.svg';
 import MapView from './MapView.jsx';
+import ZonePanel from './ZonePanel.jsx';
 import { categoryIconUrl } from './markerIcons.js';
 
 const MODES = {
@@ -221,8 +222,37 @@ function RecordForm({ kind, record, location, categories, onCategoryChange, onDi
   const [published, setPublished] = useState(isNote ? false : Boolean(record?.published ?? true));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [images, setImages] = useState(record ? null : []);
+  const [imageError, setImageError] = useState('');
+  const imageUrlsRef = useRef([]);
+  const initialImageIdsRef = useRef([]);
+  const initialRecordIdRef = useRef(record?.id ?? null);
   const initialLocationRef = useRef(location);
   const initialCategoryIdRef = useRef(categoryId);
+
+  useEffect(() => {
+    if (!initialRecordIdRef.current) return undefined;
+    const controller = new AbortController();
+    const collection = isNote ? 'notes' : 'places';
+    fetch(`/api/admin/${collection}/${initialRecordIdRef.current}/images`, { signal: controller.signal })
+      .then((response) => {
+        if (!response.ok) throw new Error('Could not load images');
+        return response.json();
+      })
+      .then((loaded) => {
+        initialImageIdsRef.current = loaded.map((image) => image.id);
+        setImages(loaded.map((image) => ({ ...image, originalCaption: image.caption })));
+      })
+      .catch((failure) => { if (failure.name !== 'AbortError') setImageError('Images could not be loaded.'); });
+    return () => controller.abort();
+  }, [isNote]);
+
+  useEffect(() => () => imageUrlsRef.current.forEach((url) => URL.revokeObjectURL(url)), []);
+
+  const imagesDirty = Boolean(images && (
+    images.length !== initialImageIdsRef.current.length ||
+    images.some((image, index) => image.file || image.id !== initialImageIdsRef.current[index] || image.caption !== image.originalCaption)
+  ));
 
   const isDirty = record ? (
     name !== record.name ||
@@ -237,23 +267,53 @@ function RecordForm({ kind, record, location, categories, onCategoryChange, onDi
     location.latitude !== initialLocationRef.current.latitude ||
     location.longitude !== initialLocationRef.current.longitude
   );
+  const formDirty = isDirty || imagesDirty;
 
   useEffect(() => {
-    onDirtyChange(isDirty);
-  }, [isDirty, onDirtyChange]);
+    onDirtyChange(formDirty);
+  }, [formDirty, onDirtyChange]);
+
+  function addImages(event) {
+    const selected = Array.from(event.target.files || []).map((file) => {
+      const url = URL.createObjectURL(file);
+      imageUrlsRef.current.push(url);
+      return { file, url, caption: '' };
+    });
+    setImages((current) => [...current, ...selected]);
+    event.target.value = '';
+  }
+
+  function moveImage(index, direction) {
+    setImages((current) => {
+      const reordered = [...current];
+      [reordered[index], reordered[index + direction]] = [reordered[index + direction], reordered[index]];
+      return reordered;
+    });
+  }
 
   async function handleSubmit(event) {
     event.preventDefault();
+    if (!images || imageError) return;
     setSaving(true);
     setError('');
     try {
+      const newFiles = [];
+      const manifest = images.map((image) => {
+        if (!image.file) return { id: image.id, caption: image.caption };
+        newFiles.push(image.file);
+        return { new_index: newFiles.length - 1, caption: image.caption };
+      });
       await onSave({
         name, category_id: isNote ? null : Number(categoryId), description, author,
         published: isNote ? false : published,
         latitude: location.latitude, longitude: location.longitude,
+      }, {
+        manifest,
+        newFiles,
+        dirty: imagesDirty,
       });
-    } catch {
-      setError(`The ${isNote ? 'note' : 'place'} could not be saved. Please try again.`);
+    } catch (failure) {
+      setError(failure.message || `The ${isNote ? 'note' : 'place'} could not be saved. Please try again.`);
     } finally {
       setSaving(false);
     }
@@ -288,17 +348,38 @@ function RecordForm({ kind, record, location, categories, onCategoryChange, onDi
           <button type="button" aria-pressed={!published} onClick={() => setPublished(false)}>Draft</button>
         </div>
       </>}
+      <div className="record-images">
+        <span className="field-label">Images <span className="optional-label">(optional)</span></span>
+        {images?.length > 1 && <p className="image-hint">The first image appears on the card.</p>}
+        {imageError && <p className="form-error" role="alert">{imageError}</p>}
+        {images === null && !imageError && <p className="image-hint">Loading images…</p>}
+        {images?.map((image, index) => (
+          <div className="record-image" key={image.id ?? image.url}>
+            <img src={image.url} alt={image.caption || `Image ${index + 1}`} />
+            <div>
+              <input aria-label={`Caption for image ${index + 1} (optional)`} placeholder="Caption (optional)" value={image.caption} disabled={saving} onChange={(event) => setImages((current) => current.map((item) => item === image ? { ...item, caption: event.target.value } : item))} />
+              <div className="record-image-actions">
+                <button type="button" aria-label={`Move image ${index + 1} up`} title="Move up" disabled={saving || index === 0} onClick={() => moveImage(index, -1)}>↑</button>
+                <button type="button" aria-label={`Move image ${index + 1} down`} title="Move down" disabled={saving || index === images.length - 1} onClick={() => moveImage(index, 1)}>↓</button>
+                <button type="button" disabled={saving} onClick={() => setImages((current) => current.filter((item) => item !== image))}>Remove</button>
+              </div>
+            </div>
+          </div>
+        ))}
+        <label className="add-image-button" htmlFor="record-image-upload">Add images</label>
+        <input id="record-image-upload" type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={saving || images === null} onChange={addImages} />
+      </div>
       {(error || actionError) && <p className="form-error" role="alert">{error || actionError}</p>}
       <div className="place-form-actions">
         <button type="button" onClick={onCancel} disabled={saving}>Cancel</button>
-        <button className="primary-button" type="submit" disabled={saving}>{saving ? 'Saving…' : `Save ${isNote ? 'note' : 'place'}`}</button>
+        <button className="primary-button" type="submit" disabled={saving || images === null || Boolean(imageError)}>{saving ? 'Saving…' : `Save ${isNote ? 'note' : 'place'}`}</button>
       </div>
       {record && <button className="delete-record-button" type="button" onClick={onDelete} disabled={saving}>Delete {isNote ? 'note' : 'place'}</button>}
     </form>
   );
 }
 
-function WorkPanel({ mode, categories, places, searchPlaces, notes, viewport, loadError, picking, draftKind, draftLocation, editingRecord, editorError, selectedRecord, publicationFilter, onPublicationFilterChange, onShowAll, onSearchSelect, onModeChange, onStartPick, onCancelDraft, onPreviewCategory, onDirtyChange, onSaveRecord, onDeleteRecord, onSelectRecord, onEditRecord }) {
+function WorkPanel({ mode, categories, places, searchPlaces, notes, zones, selectedZoneId, zoneDraft, zoneDrawing, editingZone, zoneError, viewport, loadError, picking, draftKind, draftLocation, editingRecord, editorError, selectedRecord, publicationFilter, onPublicationFilterChange, onShowAll, onSearchSelect, onModeChange, onStartPick, onCancelDraft, onPreviewCategory, onDirtyChange, onSaveRecord, onDeleteRecord, onSelectRecord, onEditRecord, onStartZone, onSelectZone, onEditZone, onFocusZone, onDeleteZone, onSaveZone, onCancelZone, onZoneNameChange, onRedrawZone }) {
   const [expanded, setExpanded] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const selectedCardRef = useRef(null);
@@ -318,7 +399,8 @@ function WorkPanel({ mode, categories, places, searchPlaces, notes, viewport, lo
 
   useEffect(() => { setSearchQuery(''); }, [mode]);
   useEffect(() => { listScrollRef.current?.scrollTo(0, 0); }, [searchQuery, mode]);
-  useEffect(() => { selectedCardRef.current?.scrollIntoView({ block: 'nearest' }); }, [selectedRecord, viewport, mode, searching]);
+  useEffect(() => { selectedCardRef.current?.scrollIntoView({ block: 'nearest' }); }, [selectedRecord, viewport, mode, searching, expanded]);
+  useEffect(() => { if (selectedRecord || selectedZoneId) setExpanded(true); }, [selectedRecord, selectedZoneId]);
 
   return (
     <aside className={`work-panel${expanded ? ' work-panel-expanded' : ''}`}>
@@ -340,7 +422,7 @@ function WorkPanel({ mode, categories, places, searchPlaces, notes, viewport, lo
             role="tab"
             aria-selected={mode === item}
             aria-controls="admin-work-content"
-            onClick={() => onModeChange(item)}
+            onClick={() => { onModeChange(item); setExpanded(true); }}
           >
             <span>{item}</span>
             <span className="mobile-tab-arrow" aria-hidden="true">›</span>
@@ -348,16 +430,31 @@ function WorkPanel({ mode, categories, places, searchPlaces, notes, viewport, lo
         ))}
       </div>
       <div
-        className={`work-panel-content${!draftLocation && !picking ? ' work-panel-list-mode' : ''}`}
+        className={`work-panel-content${!draftLocation && !picking && !zoneDraft ? ' work-panel-list-mode' : ''}`}
         id="admin-work-content"
         role="tabpanel"
         aria-labelledby={`tab-${mode.toLowerCase()}`}
       >
-        {draftLocation ? (
+        {mode === 'Zones' ? <ZonePanel
+          zones={zones}
+          selectedId={selectedZoneId}
+          draft={zoneDraft}
+          drawing={zoneDrawing}
+          editing={editingZone}
+          error={zoneError || loadError}
+          onNameChange={onZoneNameChange}
+          onSelect={onSelectZone}
+          onEdit={onEditZone}
+          onFocus={onFocusZone}
+          onDelete={onDeleteZone}
+          onSave={onSaveZone}
+          onCancel={onCancelZone}
+          onRedraw={onRedrawZone}
+        /> : draftLocation ? (
           <>
             <div className="work-panel-heading"><h1>{editingRecord ? 'Edit' : 'New'} {(editingRecord?.kind ?? draftKind) === 'NOTE' ? 'note' : 'place'}</h1></div>
             <RecordForm
-              key={editingRecord ? `${editingRecord.kind}-${editingRecord.id}` : `new-${draftKind}`}
+              key={draftKind ? `new-${draftKind}` : `${editingRecord.kind}-${editingRecord.id}`}
               kind={editingRecord?.kind ?? draftKind}
               record={editingRecord}
               location={draftLocation}
@@ -431,6 +528,7 @@ function WorkPanel({ mode, categories, places, searchPlaces, notes, viewport, lo
                       >
                         <span className="place-card-dot" style={{ background: record.kind === 'NOTE' ? '#e2a93b' : record.category_color }} />
                         <span className="place-card-text"><strong>{record.name}</strong><small>{record.kind === 'NOTE' ? 'Internal note' : record.category_name}</small></span>
+                        {record.cover_image_id && <img className="place-card-cover" src={`/api/admin/images/${record.cover_image_id}/file`} alt="" loading="lazy" />}
                         {record.kind === 'PLACE' && <span className={`place-card-status ${record.published ? 'published' : 'draft'}`}>{record.published ? 'Published' : 'Draft'}</span>}
                       </button>
                       {selected && <div className="place-card-details">
@@ -461,8 +559,8 @@ function WorkPanel({ mode, categories, places, searchPlaces, notes, viewport, lo
           </>
         )}
       </div>
-      {!draftLocation && !picking && <div className="work-panel-footer">
-        <button className="primary-button" type="button" disabled={mode === 'Zones' || (mode === 'Places' && categories.length === 0)} onClick={() => onStartPick(mode === 'Notes' ? 'NOTE' : 'PLACE')}>
+      {!draftLocation && !picking && !zoneDraft && <div className="work-panel-footer">
+        <button className="primary-button" type="button" disabled={mode === 'Places' && categories.length === 0} onClick={() => mode === 'Zones' ? onStartZone() : onStartPick(mode === 'Notes' ? 'NOTE' : 'PLACE')}>
           <span aria-hidden="true">＋</span> {content.action}
         </button>
       </div>}
@@ -475,6 +573,12 @@ function AdminPage({ onLogout, logoutError }) {
   const [categories, setCategories] = useState([]);
   const [places, setPlaces] = useState([]);
   const [notes, setNotes] = useState([]);
+  const [zones, setZones] = useState([]);
+  const [selectedZoneId, setSelectedZoneId] = useState(null);
+  const [zoneDraft, setZoneDraft] = useState(null);
+  const [zoneDrawing, setZoneDrawing] = useState(false);
+  const [editingZone, setEditingZone] = useState(null);
+  const [zoneError, setZoneError] = useState('');
   const [hiddenCategoryIds, setHiddenCategoryIds] = useState([]);
   const [notesVisible, setNotesVisible] = useState(true);
   const [publicationFilter, setPublicationFilter] = useState('All');
@@ -492,7 +596,11 @@ function AdminPage({ onLogout, logoutError }) {
   const discardDialogRef = useRef(null);
   const discardActionRef = useRef(null);
   const picking = Boolean(draftKind && !draftLocation);
-  const activeKind = editingRecord?.kind ?? draftKind;
+  const activeKind = editingRecord?.kind ?? draftKind ?? (zoneDraft ? 'ZONE' : null);
+  const zoneDirty = Boolean(zoneDraft && (editingZone
+    ? zoneDraft.name !== editingZone.name || ['min_lat', 'max_lat', 'min_lon', 'max_lon'].some((key) => zoneDraft[key] !== editingZone[key])
+    : zoneDraft.name.trim() || zoneDraft.min_lat !== null));
+  const activeDirty = zoneDraft ? zoneDirty : editingDirty;
   const visiblePlaces = useMemo(
     () => places.filter((place) => !hiddenCategoryIds.includes(place.category_id) && (
       publicationFilter === 'All' || Boolean(place.published) === (publicationFilter === 'Published')
@@ -530,29 +638,31 @@ function AdminPage({ onLogout, logoutError }) {
       fetch('/api/admin/categories', { signal: controller.signal }),
       fetch('/api/admin/places', { signal: controller.signal }),
       fetch('/api/admin/notes', { signal: controller.signal }),
-    ]).then(async ([categoriesResponse, placesResponse, notesResponse]) => {
-      if (!categoriesResponse.ok || !placesResponse.ok || !notesResponse.ok) throw new Error('Load failed');
-      const [nextCategories, nextPlaces, nextNotes] = await Promise.all([
-        categoriesResponse.json(), placesResponse.json(), notesResponse.json(),
+      fetch('/api/admin/zones', { signal: controller.signal }),
+    ]).then(async ([categoriesResponse, placesResponse, notesResponse, zonesResponse]) => {
+      if (!categoriesResponse.ok || !placesResponse.ok || !notesResponse.ok || !zonesResponse.ok) throw new Error('Load failed');
+      const [nextCategories, nextPlaces, nextNotes, nextZones] = await Promise.all([
+        categoriesResponse.json(), placesResponse.json(), notesResponse.json(), zonesResponse.json(),
       ]);
       setCategories(nextCategories);
       setPlaces(nextPlaces);
       setNotes(nextNotes);
+      setZones(nextZones);
     }).catch((error) => {
-      if (error.name !== 'AbortError') setLoadError('Places and notes could not be loaded.');
+      if (error.name !== 'AbortError') setLoadError('Map data could not be loaded.');
     });
     return () => controller.abort();
   }, []);
 
   useEffect(() => {
-    if (!editingDirty) return undefined;
+    if (!activeDirty) return undefined;
     const warnOnLeave = (event) => {
       event.preventDefault();
       event.returnValue = '';
     };
     window.addEventListener('beforeunload', warnOnLeave);
     return () => window.removeEventListener('beforeunload', warnOnLeave);
-  }, [editingDirty]);
+  }, [activeDirty]);
 
   function clearDraft() {
     setDraftKind(null);
@@ -561,16 +671,20 @@ function AdminPage({ onLogout, logoutError }) {
     setPreviewCategoryId(null);
     setEditingDirty(false);
     setEditorError('');
+    setZoneDraft(null);
+    setZoneDrawing(false);
+    setEditingZone(null);
+    setZoneError('');
   }
 
   function requestDiscard(action) {
-    if (!activeKind || !editingDirty) {
+    if (!activeKind || !activeDirty) {
       action();
       return;
     }
     discardActionRef.current = action;
     setConfirmation({
-      title: `Discard this unfinished ${activeKind === 'NOTE' ? 'note' : 'place'}?`,
+      title: `Discard this unfinished ${activeKind === 'ZONE' ? 'zone' : activeKind === 'NOTE' ? 'note' : 'place'}?`,
       message: 'Your changes will be lost.',
       action: 'Discard',
       cancel: 'Keep editing',
@@ -593,6 +707,7 @@ function AdminPage({ onLogout, logoutError }) {
     requestDiscard(() => {
       clearDraft();
       setSelectedRecord(null);
+      setSelectedZoneId(null);
       setMode(nextMode);
     });
   }
@@ -602,15 +717,17 @@ function AdminPage({ onLogout, logoutError }) {
   }
 
   function handleOutsideClick(event) {
-    if (!selectedRecord || activeKind || confirmation) return;
+    if ((!selectedRecord && !selectedZoneId) || activeKind || confirmation) return;
     if (event.target.closest('.place-card-row, .maplibregl-canvas')) return;
     setSelectedRecord(null);
+    setSelectedZoneId(null);
   }
 
   function selectRecord(record) {
     requestDiscard(() => {
       clearDraft();
       setSelectedRecord(record);
+      setSelectedZoneId(null);
       if (record) setMode(record.kind === 'NOTE' ? 'Notes' : 'Places');
     });
   }
@@ -625,6 +742,7 @@ function AdminPage({ onLogout, logoutError }) {
       }
     }
     setSelectedRecord({ kind: record.kind, id: record.id });
+    setSelectedZoneId(null);
     setMode(record.kind === 'NOTE' ? 'Notes' : 'Places');
     setMapAction({ type: 'focus', record });
   }
@@ -636,10 +754,11 @@ function AdminPage({ onLogout, logoutError }) {
       setPreviewCategoryId(record.category_id);
       setDraftLocation({ latitude: record.latitude, longitude: record.longitude });
       setSelectedRecord({ kind: record.kind, id: record.id });
+      setSelectedZoneId(null);
     });
   }
 
-  async function saveRecord(record) {
+  async function saveRecord(record, imageChanges) {
     const kind = activeKind;
     const collection = kind === 'NOTE' ? 'notes' : 'places';
     const response = await fetch(`/api/admin/${collection}${editingRecord ? `/${editingRecord.id}` : ''}`, {
@@ -655,6 +774,23 @@ function AdminPage({ onLogout, logoutError }) {
     if (kind === 'NOTE') setNotes(updateList);
     else setPlaces(updateList);
     setSelectedRecord({ kind: savedRecord.kind, id: savedRecord.id });
+    if (!editingRecord) setEditingRecord(savedRecord);
+    if (imageChanges.dirty) {
+      const body = new FormData();
+      body.append('manifest', JSON.stringify(imageChanges.manifest));
+      imageChanges.newFiles.forEach((file) => body.append('files', file));
+      const imageResponse = await fetch(`/api/admin/${collection}/${savedRecord.id}/images`, {
+        method: 'PUT', body,
+      });
+      if (!imageResponse.ok) {
+        const detail = await imageResponse.json().catch(() => ({}));
+        throw new Error(`The record was saved, but its images were not: ${detail.detail || 'please try again.'}`);
+      }
+      const savedImages = await imageResponse.json();
+      const withCover = { ...savedRecord, cover_image_id: savedImages[0]?.id ?? null };
+      if (kind === 'NOTE') setNotes((current) => current.map((item) => item.id === withCover.id ? withCover : item));
+      else setPlaces((current) => current.map((item) => item.id === withCover.id ? withCover : item));
+    }
     clearDraft();
   }
 
@@ -682,14 +818,115 @@ function AdminPage({ onLogout, logoutError }) {
     });
   }
 
+  function startZone() {
+    requestDiscard(() => {
+      clearDraft();
+      setSelectedRecord(null);
+      setSelectedZoneId(null);
+      setZoneDraft({ name: '', min_lat: null, max_lat: null, min_lon: null, max_lon: null });
+    });
+  }
+
+  function focusZone(zone) {
+    setMapAction({ type: 'zone', zone });
+  }
+
+  function selectZone(zone) {
+    requestDiscard(() => {
+      clearDraft();
+      setSelectedRecord(null);
+      setSelectedZoneId(zone?.id ?? null);
+      setMode('Zones');
+    });
+  }
+
+  function editZone(zone) {
+    requestDiscard(() => {
+      clearDraft();
+      setSelectedRecord(null);
+      setSelectedZoneId(zone.id);
+      setEditingZone(zone);
+      setZoneDraft({ ...zone });
+      focusZone(zone);
+    });
+  }
+
+  async function persistZone() {
+    if (!zoneDraft) return;
+    setZoneError('');
+    const payload = {
+      name: zoneDraft.name,
+      min_lat: zoneDraft.min_lat, max_lat: zoneDraft.max_lat,
+      min_lon: zoneDraft.min_lon, max_lon: zoneDraft.max_lon,
+    };
+    try {
+      const response = await fetch(`/api/admin/zones${editingZone ? `/${editingZone.id}` : ''}`, {
+        method: editingZone ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) {
+        if (response.status === 409) throw new Error('A zone with this name already exists.');
+        throw new Error('The zone could not be saved. Please try again.');
+      }
+      const saved = await response.json();
+      setZones((current) => (editingZone
+        ? current.map((zone) => zone.id === saved.id ? saved : zone)
+        : [...current, saved]
+      ).sort((left, right) => left.name.localeCompare(right.name)));
+      setSelectedZoneId(saved.id);
+      clearDraft();
+    } catch (error) {
+      setZoneError(error.message || 'The zone could not be saved. Please try again.');
+    }
+  }
+
+  function saveZone() {
+    if (!zoneDraft?.name.trim() || zoneDraft.min_lat === null || zoneDrawing) return;
+    const geometryChanged = editingZone && ['min_lat', 'max_lat', 'min_lon', 'max_lon'].some((key) => zoneDraft[key] !== editingZone[key]);
+    if (geometryChanged && editingZone.used_by_count > 0) {
+      discardActionRef.current = persistZone;
+      setConfirmation({
+        title: 'Change zone boundaries?',
+        message: `This zone is used by ${editingZone.used_by_count} shared map${editingZone.used_by_count === 1 ? '' : 's'}. Their visible places will change immediately.`,
+        action: 'Save zone',
+        cancel: 'Keep editing',
+      });
+    } else persistZone();
+  }
+
+  function deleteZone(zone) {
+    if (!zone.can_delete) {
+      setZoneError(`This zone is used by ${zone.used_by_count} shared maps. Edit those maps before deleting it.`);
+      return;
+    }
+    discardActionRef.current = async () => {
+      try {
+        const response = await fetch(`/api/admin/zones/${zone.id}`, { method: 'DELETE' });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        setZones((current) => current.filter((item) => item.id !== zone.id));
+        setSelectedZoneId(null);
+        setZoneError('');
+      } catch {
+        setZoneError('The zone could not be deleted. It may be used by a shared map.');
+      }
+    };
+    setConfirmation({ title: `Delete ${zone.name}?`, message: 'This cannot be undone.', action: 'Delete', cancel: 'Keep' });
+  }
+
   return (
     <div className="admin-page" onClickCapture={handleOutsideClick}>
       <AdminHeader onLogout={() => requestDiscard(() => { clearDraft(); onLogout(); })} logoutError={logoutError} />
       <main className="admin-main">
         <MapView
           mapAction={mapAction}
+          mode={mode}
           places={visiblePlaces}
           notes={notesVisible ? notes : []}
+          zones={zones}
+          selectedZoneId={selectedZoneId}
+          zoneDraft={zoneDraft}
+          onZoneDrawingChange={setZoneDrawing}
           categories={categories}
           hiddenCategoryIds={hiddenCategoryIds}
           notesVisible={notesVisible}
@@ -707,6 +944,9 @@ function AdminPage({ onLogout, logoutError }) {
           onMoveDraftLocation={setDraftLocation}
           onSelectRecord={selectRecord}
           onDeselectRecord={deselectRecord}
+          onSelectZone={(zoneId) => selectZone(zones.find((zone) => zone.id === zoneId))}
+          onDeselectZone={() => { if (!zoneDraft) setSelectedZoneId(null); }}
+          onZoneBoundsChange={(bounds) => setZoneDraft((current) => current ? { ...current, ...bounds } : current)}
           onViewportChange={setViewport}
         />
         <WorkPanel
@@ -715,6 +955,12 @@ function AdminPage({ onLogout, logoutError }) {
           places={visiblePlaces}
           searchPlaces={places}
           notes={notes}
+          zones={zones}
+          selectedZoneId={selectedZoneId}
+          zoneDraft={zoneDraft}
+          zoneDrawing={zoneDrawing}
+          editingZone={editingZone}
+          zoneError={zoneError}
           publicationFilter={publicationFilter}
           onPublicationFilterChange={setPublicationFilter}
           onShowAll={() => setMapAction({ type: 'fit', records: visiblePlaces })}
@@ -736,6 +982,15 @@ function AdminPage({ onLogout, logoutError }) {
           onDeleteRecord={deleteRecord}
           onSelectRecord={selectRecord}
           onEditRecord={editRecord}
+          onStartZone={startZone}
+          onSelectZone={selectZone}
+          onEditZone={editZone}
+          onFocusZone={focusZone}
+          onDeleteZone={deleteZone}
+          onSaveZone={saveZone}
+          onCancelZone={() => requestDiscard(clearDraft)}
+          onZoneNameChange={(name) => setZoneDraft((current) => ({ ...current, name }))}
+          onRedrawZone={() => setZoneDraft((current) => ({ ...current, min_lat: null, max_lat: null, min_lon: null, max_lon: null }))}
         />
       </main>
       <dialog
