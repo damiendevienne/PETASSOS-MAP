@@ -20,6 +20,7 @@ if __package__:
     )
     from .database import connect_database, initialize_database
     from .images import router as images_router, remove_record_files
+    from .sharing import router as sharing_router, public_router as public_sharing_router
     from .zones import router as zones_router
 else:
     from auth import (
@@ -35,6 +36,7 @@ else:
     )
     from database import connect_database, initialize_database
     from images import router as images_router, remove_record_files
+    from sharing import router as sharing_router, public_router as public_sharing_router
     from zones import router as zones_router
 
 
@@ -248,4 +250,6 @@ def admin_logout(
 
 admin_router.include_router(images_router)
 admin_router.include_router(zones_router)
+admin_router.include_router(sharing_router)
 app.include_router(admin_router)
+app.include_router(public_sharing_router)

@@ -1,7 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import petassosLogo from './assets/petassos-logo-animated.svg';
 import MapView from './MapView.jsx';
 import ZonePanel from './ZonePanel.jsx';
+import SharingPanel from './SharingPanel.jsx';
+import TravellerPage from './TravellerPage.jsx';
+import RecordCard, { recordInViewport } from './RecordCard.jsx';
 import { categoryIconUrl } from './markerIcons.js';
 
 const MODES = {
@@ -19,10 +22,11 @@ const MODES = {
   },
 };
 
-function useAdminSession() {
+function useAdminSession(publicRoute = false) {
   const [session, setSession] = useState({ state: 'checking', username: '' });
 
   useEffect(() => {
+    if (publicRoute) return undefined;
     const controller = new AbortController();
 
     fetch('/api/admin/session', { signal: controller.signal })
@@ -42,15 +46,15 @@ function useAdminSession() {
       });
 
     return () => controller.abort();
-  }, []);
+  }, [publicRoute]);
 
   useEffect(() => {
-    if (session.state === 'checking') return;
+    if (publicRoute || session.state === 'checking') return;
     const path = session.state === 'admin' ? '/admin' : '/admin/login';
     if (window.location.pathname !== path) {
       window.history.replaceState(null, '', path);
     }
-  }, [session.state]);
+  }, [session.state, publicRoute]);
 
   return [session, setSession];
 }
@@ -125,7 +129,7 @@ function LoginPage({ onLogin }) {
   );
 }
 
-function AdminHeader({ onLogout, logoutError }) {
+function AdminHeader({ onLogout, logoutError, sharing, onShare, onSharedMaps, onBack }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
 
@@ -152,8 +156,8 @@ function AdminHeader({ onLogout, logoutError }) {
         <span className="header-context">Map administration</span>
       </div>
       <div className="header-actions">
-        <button className="share-button" type="button" disabled>
-          Share map with client
+        <button className="share-button" type="button" onClick={sharing ? onBack : onShare}>
+          {sharing ? '← Map administration' : 'Share map with client'}
         </button>
         <div className="admin-menu-wrap" ref={menuRef}>
           <button
@@ -170,10 +174,10 @@ function AdminHeader({ onLogout, logoutError }) {
           {menuOpen && (
             <div className="admin-menu" role="menu">
               <button type="button" role="menuitem" disabled>Manage categories</button>
-              <button type="button" role="menuitem" disabled>Shared maps</button>
+              <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); onSharedMaps(); }}>Shared maps</button>
               <button type="button" role="menuitem" disabled>Import CSV</button>
-              <button className="mobile-share-item" type="button" role="menuitem" disabled>
-                Share map with client
+              <button className="mobile-share-item" type="button" role="menuitem" onClick={() => { setMenuOpen(false); sharing ? onBack() : onShare(); }}>
+                {sharing ? 'Map administration' : 'Share map with client'}
               </button>
               <div className="menu-divider" />
               <button type="button" role="menuitem" onClick={onLogout}>Log out</button>
@@ -391,10 +395,7 @@ function WorkPanel({ mode, categories, places, searchPlaces, notes, zones, selec
     record.name.toLocaleLowerCase().includes(searchQuery.trim().toLocaleLowerCase())
   )) : [];
   const searching = mode !== 'Zones' && Boolean(searchQuery.trim());
-  const visibleRecords = records.filter((record) => !viewport || (
-    record.latitude >= viewport.south && record.latitude <= viewport.north &&
-    record.longitude >= viewport.west && record.longitude <= viewport.east
-  ));
+  const visibleRecords = records.filter((record) => recordInViewport(record, viewport));
   const displayedRecords = searching ? searchResults : visibleRecords;
 
   useEffect(() => { setSearchQuery(''); }, [mode]);
@@ -512,40 +513,24 @@ function WorkPanel({ mode, categories, places, searchPlaces, notes, zones, selec
                 {displayedRecords.map((record) => {
                   const selected = !searching && selectedRecord?.kind === record.kind && selectedRecord.id === record.id;
                   return (
-                    <div className={`place-card-row${selected ? ' expanded' : ''}${record.kind === 'NOTE' ? ' note-row' : ''}`} key={`${record.kind}-${record.id}`} ref={selected ? selectedCardRef : null}>
-                      <button
-                        className={`place-card${record.kind === 'NOTE' ? ' note-card' : ''}${selected ? ' selected' : ''}`}
-                        type="button"
-                        aria-expanded={selected}
-                        onClick={() => {
-                          if (searching) {
-                            setSearchQuery('');
-                            onSearchSelect(record);
-                          } else {
-                            onSelectRecord(selected ? null : { kind: record.kind, id: record.id });
-                          }
-                        }}
-                      >
-                        <span className="place-card-dot" style={{ background: record.kind === 'NOTE' ? '#e2a93b' : record.category_color }} />
-                        <span className="place-card-text"><strong>{record.name}</strong><small>{record.kind === 'NOTE' ? 'Internal note' : record.category_name}</small></span>
-                        {record.cover_image_id && <img className="place-card-cover" src={`/api/admin/images/${record.cover_image_id}/file`} alt="" loading="lazy" />}
-                        {record.kind === 'PLACE' && <span className={`place-card-status ${record.published ? 'published' : 'draft'}`}>{record.published ? 'Published' : 'Draft'}</span>}
-                      </button>
-                      {selected && <div className="place-card-details">
-                        {record.description && <p>{record.description}</p>}
-                        {record.author && <small>By {record.author}</small>}
-                        <div className="place-card-actions">
-                          <button className="place-card-edit" type="button" onClick={() => onEditRecord(record)} aria-label={`Edit ${record.name}`}>Edit</button>
-                          <button className="place-card-edit place-card-focus" type="button" onClick={() => onSearchSelect(record)} aria-label={`Center map on ${record.name}`} title="Center map on this point">
-                            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
-                              <circle cx="12" cy="12" r="7" />
-                              <circle cx="12" cy="12" r="2" />
-                              <path d="M12 2v3m0 14v3M2 12h3m14 0h3" />
-                            </svg>
-                          </button>
-                        </div>
-                      </div>}
-                    </div>
+                    <RecordCard
+                      key={`${record.kind}-${record.id}`}
+                      record={record}
+                      selected={selected}
+                      selectedRef={selectedCardRef}
+                      coverUrl={record.cover_image_id ? `/api/admin/images/${record.cover_image_id}/file` : null}
+                      showPublication
+                      onSelect={() => {
+                        if (searching) {
+                          setSearchQuery('');
+                          onSearchSelect(record);
+                        } else {
+                          onSelectRecord(selected ? null : { kind: record.kind, id: record.id });
+                        }
+                      }}
+                      onEdit={() => onEditRecord(record)}
+                      onFocus={() => onSearchSelect(record)}
+                    />
                   );
                 })}
               </div>
@@ -593,6 +578,16 @@ function AdminPage({ onLogout, logoutError }) {
   const [editorError, setEditorError] = useState('');
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [confirmation, setConfirmation] = useState(null);
+  const [sharingView, setSharingView] = useState(null);
+  const [editingSharedMap, setEditingSharedMap] = useState(null);
+  const [sharingDirty, setSharingDirty] = useState(false);
+  const [shareZoneDraft, setShareZoneDraft] = useState(null);
+  const [shareZoneDrawing, setShareZoneDrawing] = useState(false);
+  const [sharePreview, setSharePreview] = useState({ zones: [], places: [], categoryIds: [], zoneIds: [] });
+  const [mapZoneToggle, setMapZoneToggle] = useState(null);
+  const sharing = Boolean(sharingView);
+
+  useEffect(() => { if (!shareZoneDraft) setShareZoneDrawing(false); }, [shareZoneDraft]);
   const discardDialogRef = useRef(null);
   const discardActionRef = useRef(null);
   const picking = Boolean(draftKind && !draftLocation);
@@ -607,6 +602,53 @@ function AdminPage({ onLogout, logoutError }) {
     )),
     [places, hiddenCategoryIds, publicationFilter],
   );
+
+  const updateSharePreview = useCallback((preview) => {
+    setSharePreview(preview);
+    setMapAction(preview.zones.length ? { type: 'zones', zones: preview.zones } : null);
+  }, []);
+
+  function enterSharing(view) {
+    if (sharing && sharingView === view) return;
+    setMapAction(null);
+    setEditingSharedMap(null);
+    setSharingView(view);
+  }
+
+  function exitSharing() {
+    const leave = () => {
+      setSharingDirty(false);
+      setShareZoneDraft(null);
+      setSharingView(null);
+      setMapAction(null);
+      fetch('/api/admin/zones').then((response) => response.ok ? response.json() : null).then((data) => { if (data) setZones(data); }).catch(() => {});
+    };
+    if (sharingDirty) {
+      discardActionRef.current = leave;
+      setConfirmation({ title: 'Discard changes to this shared map?', message: 'Your unfinished changes will be lost.', action: 'Discard', cancel: 'Keep editing' });
+    } else leave();
+  }
+
+  function changeSharingView(view, shared = null, force = false) {
+    const change = () => {
+      setSharingDirty(false);
+      setShareZoneDraft(null);
+      setEditingSharedMap(shared);
+      setSharingView(view);
+    };
+    if (sharingDirty && !force) {
+      discardActionRef.current = change;
+      setConfirmation({ title: 'Discard changes to this shared map?', message: 'Your unfinished changes will be lost.', action: 'Discard', cancel: 'Keep editing' });
+    } else change();
+  }
+
+  function cancelShareZone() {
+    const cancel = () => setShareZoneDraft(null);
+    if (shareZoneDraft?.name.trim() || shareZoneDraft?.min_lat !== null || shareZoneDrawing) {
+      discardActionRef.current = cancel;
+      setConfirmation({ title: 'Discard this unfinished zone?', message: 'Your changes will be lost.', action: 'Discard', cancel: 'Keep editing' });
+    } else cancel();
+  }
 
   function toggleCategory(categoryId) {
     setHiddenCategoryIds((current) => current.includes(categoryId)
@@ -717,7 +759,7 @@ function AdminPage({ onLogout, logoutError }) {
   }
 
   function handleOutsideClick(event) {
-    if ((!selectedRecord && !selectedZoneId) || activeKind || confirmation) return;
+    if (sharing || (!selectedRecord && !selectedZoneId) || activeKind || confirmation) return;
     if (event.target.closest('.place-card-row, .maplibregl-canvas')) return;
     setSelectedRecord(null);
     setSelectedZoneId(null);
@@ -916,17 +958,24 @@ function AdminPage({ onLogout, logoutError }) {
 
   return (
     <div className="admin-page" onClickCapture={handleOutsideClick}>
-      <AdminHeader onLogout={() => requestDiscard(() => { clearDraft(); onLogout(); })} logoutError={logoutError} />
-      <main className="admin-main">
+      <AdminHeader onLogout={() => {
+        const logOut = () => requestDiscard(() => { clearDraft(); onLogout(); });
+        if (sharingDirty) {
+          discardActionRef.current = logOut;
+          setConfirmation({ title: 'Discard changes to this shared map?', message: 'Your unfinished changes will be lost.', action: 'Discard', cancel: 'Keep editing' });
+        } else logOut();
+      }} logoutError={logoutError} sharing={sharing} onShare={() => enterSharing('create')} onSharedMaps={() => sharing ? changeSharingView('list') : enterSharing('list')} onBack={exitSharing} />
+      <main className={`admin-main${sharing ? ' sharing-mode' : ''}`}>
         <MapView
+          sharing={sharing}
           mapAction={mapAction}
-          mode={mode}
-          places={visiblePlaces}
-          notes={notesVisible ? notes : []}
+          mode={sharing ? 'Sharing' : mode}
+          places={sharing ? sharePreview.places : visiblePlaces}
+          notes={sharing ? [] : notesVisible ? notes : []}
           zones={zones}
-          selectedZoneId={selectedZoneId}
-          zoneDraft={zoneDraft}
-          onZoneDrawingChange={setZoneDrawing}
+          selectedZoneId={sharing ? sharePreview.zoneIds : selectedZoneId}
+          zoneDraft={sharing ? shareZoneDraft : zoneDraft}
+          onZoneDrawingChange={sharing ? setShareZoneDrawing : setZoneDrawing}
           categories={categories}
           hiddenCategoryIds={hiddenCategoryIds}
           notesVisible={notesVisible}
@@ -934,22 +983,22 @@ function AdminPage({ onLogout, logoutError }) {
           onToggleNotes={() => setNotesVisible((visible) => !visible)}
           onShowAll={showAllMarkers}
           onHideAll={hideAllMarkers}
-          picking={picking}
-          draftKind={draftKind}
-          draftLocation={draftLocation}
-          editingRecord={editingRecord}
+          picking={sharing ? false : picking}
+          draftKind={sharing ? null : draftKind}
+          draftLocation={sharing ? null : draftLocation}
+          editingRecord={sharing ? null : editingRecord}
           editingCategory={categories.find((category) => category.id === previewCategoryId)}
-          selectedRecord={selectedRecord}
+          selectedRecord={sharing ? null : selectedRecord}
           onPickLocation={setDraftLocation}
           onMoveDraftLocation={setDraftLocation}
-          onSelectRecord={selectRecord}
-          onDeselectRecord={deselectRecord}
-          onSelectZone={(zoneId) => selectZone(zones.find((zone) => zone.id === zoneId))}
-          onDeselectZone={() => { if (!zoneDraft) setSelectedZoneId(null); }}
-          onZoneBoundsChange={(bounds) => setZoneDraft((current) => current ? { ...current, ...bounds } : current)}
-          onViewportChange={setViewport}
+          onSelectRecord={sharing ? () => {} : selectRecord}
+          onDeselectRecord={sharing ? () => {} : deselectRecord}
+          onSelectZone={sharing ? (zoneId) => setMapZoneToggle({ id: zoneId, at: Date.now() }) : (zoneId) => selectZone(zones.find((zone) => zone.id === zoneId))}
+          onDeselectZone={sharing ? () => {} : () => { if (!zoneDraft) setSelectedZoneId(null); }}
+          onZoneBoundsChange={sharing ? (bounds) => setShareZoneDraft((current) => current ? { ...current, ...bounds } : current) : (bounds) => setZoneDraft((current) => current ? { ...current, ...bounds } : current)}
+          onViewportChange={sharing ? () => {} : setViewport}
         />
-        <WorkPanel
+        <div className={sharing ? 'admin-panel-hidden' : 'admin-panel-visible'} inert={sharing ? '' : undefined}><WorkPanel
           mode={mode}
           categories={categories}
           places={visiblePlaces}
@@ -991,7 +1040,8 @@ function AdminPage({ onLogout, logoutError }) {
           onCancelZone={() => requestDiscard(clearDraft)}
           onZoneNameChange={(name) => setZoneDraft((current) => ({ ...current, name }))}
           onRedrawZone={() => setZoneDraft((current) => ({ ...current, min_lat: null, max_lat: null, min_lon: null, max_lon: null }))}
-        />
+        /></div>
+        {sharing && <SharingPanel view={sharingView} editingMap={editingSharedMap} zones={zones} categories={categories} places={places} zoneDraft={shareZoneDraft} setZoneDraft={setShareZoneDraft} zoneDrawing={shareZoneDrawing} mapZoneToggle={mapZoneToggle} onZoneCreated={(zone) => setZones((current) => [...current, zone].sort((a, b) => a.name.localeCompare(b.name)))} onPreviewChange={updateSharePreview} onDirtyChange={setSharingDirty} onChangeView={changeSharingView} onClose={exitSharing} onCancelZone={cancelShareZone} />}
       </main>
       <dialog
         className="discard-dialog"
@@ -1011,7 +1061,8 @@ function AdminPage({ onLogout, logoutError }) {
 }
 
 export default function App() {
-  const [session, setSession] = useAdminSession();
+  const token = window.location.pathname.match(/^\/s\/([A-Za-z0-9_-]+)\/?$/)?.[1];
+  const [session, setSession] = useAdminSession(Boolean(token));
   const [logoutError, setLogoutError] = useState('');
 
   async function handleLogout() {
@@ -1024,6 +1075,8 @@ export default function App() {
       setLogoutError('Could not log out. Please try again.');
     }
   }
+
+  if (token) return <TravellerPage token={token} />;
 
   if (session.state === 'checking') {
     return (

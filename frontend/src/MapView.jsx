@@ -47,6 +47,7 @@ function recordsGeoJSON(places, notes, selectedRecord, editingRecord, hoveredRec
         image: record.kind === 'NOTE' ? 'petassos-note' : placeMarkerId(record),
         selected: selectedRecord?.kind === record.kind && selectedRecord.id === record.id,
         hovered: hoveredRecord?.kind === record.kind && hoveredRecord.id === record.id,
+        dimmed: Boolean(record.preview_dimmed),
       },
     })),
   };
@@ -79,18 +80,19 @@ function zoneFeature(zone, selected, active, draft = false) {
 }
 
 function zonesGeoJSON(mode, zones, selectedZoneId, zoneDraft) {
-  const active = mode === 'Zones';
+  const active = mode === 'Zones' || mode === 'Sharing';
+  const isSelected = (id) => Array.isArray(selectedZoneId) ? selectedZoneId.includes(id) : id === selectedZoneId;
   const visibleZones = zones.filter((zone) => zone.id !== zoneDraft?.id && hasZoneBounds(zone))
     .sort((left, right) => zoneArea(right) - zoneArea(left) || left.id - right.id);
   if (active && hasZoneBounds(zoneDraft)) visibleZones.push(zoneDraft);
   return {
     type: 'FeatureCollection',
     features: [
-      ...visibleZones.map((zone) => zoneFeature(zone, zone === zoneDraft || zone.id === selectedZoneId, active, zone === zoneDraft)),
+      ...visibleZones.map((zone) => zoneFeature(zone, zone === zoneDraft || isSelected(zone.id), active && (mode !== 'Sharing' || zone === zoneDraft || isSelected(zone.id)), zone === zoneDraft)),
       ...visibleZones.filter((zone) => zone.name?.trim()).map((zone) => ({
         type: 'Feature',
         geometry: { type: 'Point', coordinates: [zone.min_lon, zone.max_lat] },
-        properties: { id: zone.id ?? 0, name: zone.name, active, selected: zone === zoneDraft || zone.id === selectedZoneId, draft: zone === zoneDraft },
+        properties: { id: zone.id ?? 0, name: zone.name, active: active && (mode !== 'Sharing' || zone === zoneDraft || isSelected(zone.id)), selected: zone === zoneDraft || isSelected(zone.id), draft: zone === zoneDraft },
       })),
     ],
   };
@@ -108,9 +110,12 @@ function clamp(value, minimum, maximum) {
   return Math.min(maximum, Math.max(minimum, value));
 }
 
-export default function MapView({ mapAction, mode, places, notes, zones, selectedZoneId, zoneDraft, categories, hiddenCategoryIds, notesVisible, onToggleCategory, onToggleNotes, onShowAll, onHideAll, picking, draftKind, draftLocation, editingRecord, editingCategory, selectedRecord, onPickLocation, onMoveDraftLocation, onSelectRecord, onDeselectRecord, onSelectZone, onDeselectZone, onZoneBoundsChange, onZoneDrawingChange, onViewportChange }) {
+export default function MapView({ mapAction, mode, places, notes, zones, selectedZoneId, zoneDraft, categories, hiddenCategoryIds, notesVisible, onToggleCategory, onToggleNotes, onShowAll, onHideAll, picking, draftKind, draftLocation, editingRecord, editingCategory, selectedRecord, onPickLocation, onMoveDraftLocation, onSelectRecord, onDeselectRecord, onSelectZone, onDeselectZone, onZoneBoundsChange, onZoneDrawingChange, onViewportChange, sharing = false, showNotesOption = true }) {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
+  const adminCameraRef = useRef(null);
+  const adminSearchRef = useRef(null);
+  const [mapReady, setMapReady] = useState(false);
   const draftMarkerRef = useRef(null);
   const zoneHandlesRef = useRef([]);
   const zoneAnchorRef = useRef(null);
@@ -181,7 +186,7 @@ export default function MapView({ mapAction, mode, places, notes, zones, selecte
       map?.getSource('admin-records')?.setData(recordsGeoJSON(places, notes, selectedRecord, editingRecord));
     }
     if (map?.getLayer('admin-record-icons')) {
-      map.setPaintProperty('admin-record-icons', 'icon-opacity', mode === 'Zones' ? ['case', ['get', 'hovered'], 1, 0.4] : 1);
+      map.setPaintProperty('admin-record-icons', 'icon-opacity', mode === 'Sharing' ? ['case', ['get', 'dimmed'], 0.35, 1] : mode === 'Zones' ? ['case', ['get', 'hovered'], 1, 0.4] : 1);
     }
   }, [mode, zones, selectedZoneId, zoneDraft]);
 
@@ -191,7 +196,7 @@ export default function MapView({ mapAction, mode, places, notes, zones, selecte
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || mode !== 'Zones' || !hasZoneBounds(zoneDraft) || zoneAnchorRef.current) {
+    if (!map || !['Zones', 'Sharing'].includes(mode) || !hasZoneBounds(zoneDraft) || zoneAnchorRef.current) {
       zoneHandlesRef.current.forEach(({ marker }) => marker.remove());
       zoneHandlesRef.current = [];
       return;
@@ -281,7 +286,7 @@ export default function MapView({ mapAction, mode, places, notes, zones, selecte
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !mapAction) return;
+    if (!map || !mapReady || !mapAction) return;
     const { clientWidth: width, clientHeight: height } = map.getContainer();
     const mobile = width <= 700;
     if (mapAction.type === 'focus') {
@@ -303,6 +308,12 @@ export default function MapView({ mapAction, mode, places, notes, zones, selecte
         maxZoom: 12,
         duration: 650,
       });
+    } else if (mapAction.type === 'zones' && mapAction.zones.length) {
+      const bounds = mapAction.zones.reduce((result, zone) => [
+        [Math.min(result[0][0], zone.min_lon), Math.min(result[0][1], zone.min_lat)],
+        [Math.max(result[1][0], zone.max_lon), Math.max(result[1][1], zone.max_lat)],
+      ], [[Infinity, Infinity], [-Infinity, -Infinity]]);
+      map.fitBounds(bounds, { padding: { top: 55, right: 55, bottom: mobile ? Math.min(420, height * 0.6) : 55, left: mobile ? 55 : Math.min(440, width * 0.45) }, maxZoom: 12, duration: 650 });
     } else if (mapAction.type === 'fit' && mapAction.records.length) {
       const bounds = mapAction.records.reduce((result, record) => [
         [Math.min(result[0][0], record.longitude), Math.min(result[0][1], record.latitude)],
@@ -328,7 +339,27 @@ export default function MapView({ mapAction, mode, places, notes, zones, selecte
         });
       }
     }
-  }, [mapAction]);
+  }, [mapAction, mapReady]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (sharing) {
+      map.stop();
+      adminCameraRef.current = { center: map.getCenter(), zoom: map.getZoom(), bearing: map.getBearing(), pitch: map.getPitch() };
+      adminSearchRef.current = { query: geoQuery, results: geoResults, error: geoError };
+    } else if (adminCameraRef.current) {
+      geoRequestRef.current?.abort();
+      map.stop();
+      map.jumpTo(adminCameraRef.current);
+      adminCameraRef.current = null;
+      setGeoQuery(adminSearchRef.current.query);
+      setGeoResults(adminSearchRef.current.results);
+      setGeoError(adminSearchRef.current.error);
+      adminSearchRef.current = null;
+    }
+    map.resize();
+  }, [sharing]);
 
   useEffect(() => {
     if (!containerRef.current) return undefined;
@@ -357,7 +388,7 @@ export default function MapView({ mapAction, mode, places, notes, zones, selecte
           south: bounds.getSouth(), north: bounds.getNorth(),
         });
       };
-      map.on('load', updateViewport);
+      map.on('load', () => { updateViewport(); setMapReady(true); });
       map.on('moveend', updateViewport);
       map.on('mousemove', (event) => {
         if (zoneAnchorRef.current) {
@@ -403,7 +434,7 @@ export default function MapView({ mapAction, mode, places, notes, zones, selecte
           onPickLocationRef.current({ latitude: event.lngLat.lat, longitude: event.lngLat.lng });
           return;
         }
-        if (modeRef.current === 'Zones' && zoneDraftRef.current && (zoneAnchorRef.current || !hasZoneBounds(zoneDraftRef.current))) {
+        if (['Zones', 'Sharing'].includes(modeRef.current) && zoneDraftRef.current && (zoneAnchorRef.current || !hasZoneBounds(zoneDraftRef.current))) {
           if (!zoneAnchorRef.current) {
             zoneAnchorRef.current = event.lngLat;
             onZoneDrawingChangeRef.current(true);
@@ -431,7 +462,7 @@ export default function MapView({ mapAction, mode, places, notes, zones, selecte
           if (!zoneDraftRef.current) onSelectZoneRef.current(Number(label.properties.id));
           return;
         }
-        if (modeRef.current === 'Zones') {
+        if (modeRef.current === 'Zones' || modeRef.current === 'Sharing') {
           const draft = zoneDraftRef.current;
           if (hasZoneBounds(draft) && containsPoint(draft, event.lngLat)) return;
           const zone = zonesRef.current
@@ -515,12 +546,12 @@ export default function MapView({ mapAction, mode, places, notes, zones, selecte
               'icon-image': ['get', 'image'],
               'icon-size': ['case', ['get', 'selected'],
                 ['case', ['==', ['get', 'kind'], 'NOTE'], 1.45, 44 / 31], ['get', 'hovered'], 1.15, 1],
-              'symbol-sort-key': ['case', ['get', 'selected'], 2, ['get', 'hovered'], 1, 0],
+              'symbol-sort-key': ['case', ['get', 'selected'], 2, ['get', 'hovered'], 1, ['get', 'dimmed'], -1, 0],
               'icon-allow-overlap': true,
               'icon-ignore-placement': true,
             },
             paint: {
-              'icon-opacity': modeRef.current === 'Zones' ? ['case', ['get', 'hovered'], 1, 0.4] : 1,
+              'icon-opacity': modeRef.current === 'Sharing' ? ['case', ['get', 'dimmed'], 0.35, 1] : modeRef.current === 'Zones' ? ['case', ['get', 'hovered'], 1, 0.4] : 1,
             },
           });
           map.getSource('admin-records').setData(recordsGeoJSON(
@@ -625,12 +656,12 @@ export default function MapView({ mapAction, mode, places, notes, zones, selecte
           <small>Search data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a></small>
         </div>}
       </form>
-      <div className="map-visibility-picker">
+      {(categories.length > 0 || showNotesOption) && <div className="map-visibility-picker">
         {visibilityOpen && <div className="map-visibility-panel" id="map-visibility-options" aria-label="Map marker visibility">
           <strong>Show on map</strong>
           <div className="map-visibility-actions">
-            <button type="button" onClick={onShowAll} disabled={hiddenCategoryIds.length === 0 && notesVisible}>Select all</button>
-            <button type="button" onClick={onHideAll} disabled={hiddenCategoryIds.length === categories.length && !notesVisible}>Deselect all</button>
+            <button type="button" onClick={onShowAll} disabled={hiddenCategoryIds.length === 0 && (!showNotesOption || notesVisible)}>Select all</button>
+            <button type="button" onClick={onHideAll} disabled={hiddenCategoryIds.length === categories.length && (!showNotesOption || !notesVisible)}>Deselect all</button>
           </div>
           <div className="map-visibility-options">
             {categories.map((category) => (
@@ -641,12 +672,12 @@ export default function MapView({ mapAction, mode, places, notes, zones, selecte
                 <span className="map-visibility-switch" aria-hidden="true" />
               </label>
             ))}
-            <label className="map-visibility-option map-visibility-note">
+            {showNotesOption && <label className="map-visibility-option map-visibility-note">
               <img src={noteMarkerUrl} alt="" />
               <span>Notes</span>
               <input type="checkbox" role="switch" checked={notesVisible} onChange={onToggleNotes} />
               <span className="map-visibility-switch" aria-hidden="true" />
-            </label>
+            </label>}
           </div>
         </div>}
         <button
@@ -664,7 +695,7 @@ export default function MapView({ mapAction, mode, places, notes, zones, selecte
             <circle cx="12" cy="10" r="2.2" />
           </svg>
         </button>
-      </div>
+      </div>}
       <div className="map-style-picker">
         {styleMenuOpen && (
           <div className="map-style-options" id="map-style-options">
