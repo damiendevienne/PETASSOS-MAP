@@ -3,12 +3,14 @@
 import sqlite3
 from contextlib import closing
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 if __package__:
+    from .auth import require_superadmin
     from .database import connect_database
 else:
+    from auth import require_superadmin
     from database import connect_database
 
 
@@ -17,17 +19,28 @@ router = APIRouter()
 
 class ZoneInput(BaseModel):
     name: str
+    about_title: str = ""
+    about_text: str = ""
+    locked: bool | None = None
     min_lat: float = Field(ge=-90, le=90)
     max_lat: float = Field(ge=-90, le=90)
     min_lon: float = Field(ge=-180, le=180)
     max_lon: float = Field(ge=-180, le=180)
 
 
+class ArchiveInput(BaseModel):
+    archived: bool
+
+
 def _values(zone: ZoneInput) -> tuple:
     name = zone.name.strip()
+    about_title = zone.about_title.strip()
+    about_text = zone.about_text.strip()
     if not name or zone.min_lat >= zone.max_lat or zone.min_lon >= zone.max_lon:
         raise HTTPException(status_code=422, detail="Enter a name and valid rectangle")
-    return name, zone.min_lat, zone.max_lat, zone.min_lon, zone.max_lon
+    if bool(about_title) != bool(about_text):
+        raise HTTPException(status_code=422, detail="Enter both an About title and text, or leave both empty")
+    return name, about_title, about_text, zone.min_lat, zone.max_lat, zone.min_lon, zone.max_lon
 
 
 def _check_name(connection, name: str, zone_id: int | None = None) -> None:
@@ -45,27 +58,34 @@ def _zone(connection, zone_id: int) -> dict:
     if row is None:
         raise HTTPException(status_code=404, detail="Zone not found")
     zone = dict(row)
-    zone["can_edit"] = True
-    zone["can_delete"] = zone["used_by_count"] == 0
+    zone["can_edit"] = zone["archived_at"] is None
+    zone["can_archive"] = zone["archived_at"] is None and zone["used_by_count"] == 0
+    zone["can_delete"] = zone["archived_at"] is not None and zone["used_by_count"] == 0
     return zone
 
 
 @router.get("/zones")
-def list_zones() -> list[dict]:
+def list_zones(archived: bool = False) -> list[dict]:
     with closing(connect_database()) as connection:
-        rows = connection.execute("SELECT id FROM zones ORDER BY name COLLATE NOCASE, id").fetchall()
+        rows = connection.execute(
+            f"SELECT id FROM zones WHERE archived_at IS {'NOT ' if archived else ''}NULL "
+            "ORDER BY name COLLATE NOCASE, id"
+        ).fetchall()
         return [_zone(connection, row["id"]) for row in rows]
 
 
 @router.post("/zones", status_code=201)
-def create_zone(zone: ZoneInput) -> dict:
+def create_zone(zone: ZoneInput, request: Request) -> dict:
     try:
         with closing(connect_database()) as connection, connection:
+            if zone.locked:
+                require_superadmin(request)
             values = _values(zone)
             _check_name(connection, values[0])
             cursor = connection.execute(
-                "INSERT INTO zones (name, min_lat, max_lat, min_lon, max_lon) VALUES (?, ?, ?, ?, ?)",
-                values,
+                "INSERT INTO zones (name, about_title, about_text, min_lat, max_lat, min_lon, max_lon, locked) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (*values, int(bool(zone.locked))),
             )
             return _zone(connection, cursor.lastrowid)
     except sqlite3.IntegrityError as exc:
@@ -73,25 +93,48 @@ def create_zone(zone: ZoneInput) -> dict:
 
 
 @router.put("/zones/{zone_id}")
-def update_zone(zone_id: int, zone: ZoneInput) -> dict:
+def update_zone(zone_id: int, zone: ZoneInput, request: Request) -> dict:
     try:
         with closing(connect_database()) as connection, connection:
-            _zone(connection, zone_id)
+            existing = _zone(connection, zone_id)
+            if not existing["can_edit"]:
+                raise HTTPException(status_code=409, detail="Restore this zone before editing it")
+            locked = bool(existing["locked"]) if zone.locked is None else zone.locked
+            bounds_changed = any(getattr(zone, key) != existing[key] for key in ("min_lat", "max_lat", "min_lon", "max_lon"))
+            name_changed = zone.name.strip() != existing["name"]
+            if locked != bool(existing["locked"]) or (existing["locked"] and (bounds_changed or name_changed)):
+                require_superadmin(request)
             values = _values(zone)
             _check_name(connection, values[0], zone_id)
             connection.execute(
-                "UPDATE zones SET name = ?, min_lat = ?, max_lat = ?, min_lon = ?, max_lon = ? WHERE id = ?",
-                (*values, zone_id),
+                "UPDATE zones SET name = ?, about_title = ?, about_text = ?, "
+                "min_lat = ?, max_lat = ?, min_lon = ?, max_lon = ?, locked = ? WHERE id = ?",
+                (*values, int(locked), zone_id),
             )
             return _zone(connection, zone_id)
     except sqlite3.IntegrityError as exc:
         raise HTTPException(status_code=409, detail="A zone with this name already exists") from exc
 
 
-@router.delete("/zones/{zone_id}", status_code=204)
+@router.patch("/zones/{zone_id}/archive", status_code=204)
+def archive_zone(zone_id: int, change: ArchiveInput) -> None:
+    with closing(connect_database()) as connection, connection:
+        zone = _zone(connection, zone_id)
+        if change.archived and zone["used_by_count"]:
+            raise HTTPException(status_code=409, detail="Remove this zone from shared maps before archiving it")
+        connection.execute(
+            "UPDATE zones SET archived_at = "
+            "CASE WHEN ? THEN strftime('%Y-%m-%dT%H:%M:%fZ', 'now') ELSE NULL END "
+            "WHERE id = ?", (int(change.archived), zone_id),
+        )
+
+
+@router.delete("/zones/{zone_id}", status_code=204, dependencies=[Depends(require_superadmin)])
 def delete_zone(zone_id: int) -> None:
     with closing(connect_database()) as connection, connection:
         zone = _zone(connection, zone_id)
+        if zone["archived_at"] is None:
+            raise HTTPException(status_code=409, detail="Archive this zone before deleting it permanently")
         if not zone["can_delete"]:
             raise HTTPException(status_code=409, detail="This zone is used by shared maps and cannot be deleted")
         connection.execute("DELETE FROM zones WHERE id = ?", (zone_id,))

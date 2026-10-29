@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Petassos map styles · comparison</title>
+    <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@6.14.0/dist/maplibre-gl.css" />
+    <style>
+      * { box-sizing: border-box; }
+      html, body { margin: 0; min-height: 100%; }
+      body { font-family: Arial, sans-serif; color: #263c56; background: #f7f4ed; }
+      header { padding: 18px 24px 14px; background: #fff; border-bottom: 1px solid #dfdfd7; }
+      h1 { margin: 0 0 5px; font-size: 22px; }
+      header p { margin: 0; color: #68778a; font-size: 14px; }
+      main { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 16px; }
+      section { min-width: 0; overflow: hidden; border: 1px solid #d6d9d6; border-radius: 12px; background: #fff; }
+      .caption { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 12px 16px; }
+      h2 { margin: 0; font-size: 18px; }
+      .caption p { margin: 0; color: #68778a; font-size: 13px; }
+      .map { height: calc(100dvh - 145px); min-height: 420px; }
+      @media (max-width: 850px) {
+        main { grid-template-columns: 1fr; }
+        .map { height: 52dvh; min-height: 350px; }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Petassos map style studies</h1>
+      <p>Two versions of the same OpenFreeMap vector map. Pan and zoom each map to compare them.</p>
+    </header>
+    <main>
+      <section>
+        <div class="caption"><h2>Subtle watercolour</h2><p>Quiet, light, everyday use</p></div>
+        <div id="subtle-map" class="map"></div>
+      </section>
+      <section>
+        <div class="caption"><h2>Illustrated coast</h2><p>Stronger colour and visible brushwork</p></div>
+        <div id="illustrated-map" class="map"></div>
+      </section>
+    </main>
+    <script type="module">
+      import { Map, NavigationControl } from 'https://unpkg.com/maplibre-gl@6.14.0/dist/maplibre-gl.mjs';
+
+      for (const variant of ['subtle', 'illustrated']) {
+        const map = new Map({
+          container: `${variant}-map`,
+          style: `./variants/petassos-${variant}.json`,
+          center: [24.65, 35.25],
+          zoom: 8.5,
+          attributionControl: true,
+        });
+        map.addControl(new NavigationControl({ showCompass: false }), 'top-right');
+      }
+    </script>
+  </body>
+</html>

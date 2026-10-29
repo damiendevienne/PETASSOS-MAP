@@ -194,7 +194,202 @@ def _migration_4(connection: sqlite3.Connection) -> None:
     connection.execute("CREATE UNIQUE INDEX zones_name_unique_idx ON zones(lower(trim(name)))")
 
 
-MIGRATIONS = (_migration_1, _migration_2, _migration_3, _migration_4)
+def _migration_5(connection: sqlite3.Connection) -> None:
+    """Archive map content and distinguish editor sessions from the original account."""
+    connection.execute("ALTER TABLE places ADD COLUMN archived_at TEXT")
+    connection.execute("ALTER TABLE zones ADD COLUMN archived_at TEXT")
+    connection.execute(
+        "CREATE TABLE admin_accounts ("
+        "username TEXT PRIMARY KEY COLLATE NOCASE, password_hash TEXT NOT NULL)"
+    )
+    connection.execute("ALTER TABLE admin_sessions ADD COLUMN username TEXT NOT NULL DEFAULT ''")
+    connection.execute(
+        "ALTER TABLE admin_sessions ADD COLUMN role TEXT NOT NULL DEFAULT 'superadmin' "
+        "CHECK (role IN ('admin', 'superadmin'))"
+    )
+    connection.execute("DELETE FROM admin_sessions")
+
+
+def _migration_6(connection: sqlite3.Connection) -> None:
+    """Group the four existing choices without changing place or shared-link IDs."""
+    connection.execute("ALTER TABLE categories ADD COLUMN parent_id INTEGER REFERENCES categories(id)")
+    connection.execute("ALTER TABLE categories ADD COLUMN marker_style TEXT NOT NULL DEFAULT 'circle'")
+    connection.execute("ALTER TABLE categories ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0")
+
+    what_to_do = connection.execute(
+        "INSERT INTO categories (name, icon, color, sort_order) VALUES (?, ?, ?, ?)",
+        ("What to do", "mountain", "#39A90D", 1),
+    ).lastrowid
+    for order, category_id in enumerate(range(1, 5), start=1):
+        connection.execute(
+            "UPDATE categories SET parent_id = ?, color = '#39A90D', sort_order = ? WHERE id = ?",
+            (what_to_do, order, category_id),
+        )
+    connection.execute("UPDATE categories SET name = 'Wineries' WHERE id = 4")
+
+    top_level = (
+        ("Hotels", "lodging", "#7656A6", 2, "circle"),
+        ("Where to eat/drink", "restaurant", "#D46D43", 3, "circle"),
+        ("What to see", "museum", "#0D84CF", 4, "circle"),
+        ("Tips from the locals", "information", "#C48728", 5, "circle"),
+        ("Information", "information", "#256E9D", 6, "information"),
+    )
+    what_to_see = None
+    for name, icon, color, order, marker_style in top_level:
+        category_id = connection.execute(
+            "INSERT INTO categories (name, icon, color, sort_order, marker_style) VALUES (?, ?, ?, ?, ?)",
+            (name, icon, color, order, marker_style),
+        ).lastrowid
+        if name == "What to see":
+            what_to_see = category_id
+    for order, (name, icon) in enumerate((
+        ("Sites and museums", "museum"),
+        ("Gorges", "mountain"),
+        ("Beaches", "beach"),
+        ("Villages", "village"),
+        ("Festivals", "music"),
+    ), start=1):
+        connection.execute(
+            "INSERT INTO categories (name, icon, color, parent_id, sort_order) VALUES (?, ?, ?, ?, ?)",
+            (name, icon, "#0D84CF", what_to_see, order),
+        )
+
+
+def _migration_7(connection: sqlite3.Connection) -> None:
+    """Split beaches into serviced and unserviced choices."""
+    beach = connection.execute("SELECT id, parent_id, color FROM categories WHERE name = 'Beaches'").fetchone()
+    connection.execute(
+        "UPDATE categories SET name = 'Serviced beach' WHERE id = ?", (beach["id"],)
+    )
+    connection.execute(
+        "UPDATE categories SET sort_order = sort_order + 1 "
+        "WHERE parent_id = ? AND sort_order > 3", (beach["parent_id"],)
+    )
+    connection.execute(
+        "INSERT INTO categories (name, icon, color, parent_id, sort_order) VALUES (?, ?, ?, ?, ?)",
+        ("Unserviced beach", "swimming", beach["color"], beach["parent_id"], 4),
+    )
+
+
+def _migration_8(connection: sqlite3.Connection) -> None:
+    """Allow an optional external link on places and internal notes."""
+    connection.execute("ALTER TABLE places ADD COLUMN link_url TEXT")
+
+
+def _migration_9(connection: sqlite3.Connection) -> None:
+    """Keep optional client-facing information with each zone."""
+    connection.execute("ALTER TABLE zones ADD COLUMN about_title TEXT NOT NULL DEFAULT ''")
+    connection.execute("ALTER TABLE zones ADD COLUMN about_text TEXT NOT NULL DEFAULT ''")
+
+
+def _migration_10(connection: sqlite3.Connection) -> None:
+    """Mark zones whose boundaries only a superadmin may change."""
+    connection.execute("ALTER TABLE zones ADD COLUMN locked INTEGER NOT NULL DEFAULT 0 CHECK (locked IN (0, 1))")
+
+
+def _migration_11(connection: sqlite3.Connection) -> None:
+    """Give each place category and category group its own map icon."""
+    icons = {
+        "What to do": "star",
+        "Outdoor activities": "mountain",
+        "Sea activities": "swimming",
+        "Gastronomy": "restaurant",
+        "Wineries": "alcohol-shop",
+        "Hotels": "lodging",
+        "Where to eat/drink": "cafe",
+        "What to see": "landmark",
+        "Sites and museums": "museum",
+        "Gorges": "waterfall",
+        "Serviced beach": "drinking-water",
+        "Unserviced beach": "beach",
+        "Villages": "village",
+        "Festivals": "music",
+        "Tips from the locals": "heart",
+        "Information": "information",
+    }
+    connection.executemany(
+        "UPDATE categories SET icon = ? WHERE name = ?",
+        ((icon, name) for name, icon in icons.items()),
+    )
+
+
+def _migration_12(connection: sqlite3.Connection) -> None:
+    """Use familiar beach icons and an eye for the What to see group."""
+    icons = {
+        "Sea activities": "water",
+        "Serviced beach": "beach",
+        "Unserviced beach": "swimming",
+        "What to see": "eye",
+    }
+    connection.executemany(
+        "UPDATE categories SET icon = ? WHERE name = ?",
+        ((icon, name) for name, icon in icons.items()),
+    )
+
+
+def _migration_13(connection: sqlite3.Connection) -> None:
+    """Use a boat icon for sea activities."""
+    connection.execute("UPDATE categories SET icon = 'racetrack-boat' WHERE name = 'Sea activities'")
+
+
+def _migration_14(connection: sqlite3.Connection) -> None:
+    """Use a distinct mountain-like icon for gorges."""
+    connection.execute("UPDATE categories SET icon = 'volcano' WHERE name = 'Gorges'")
+
+
+def _migration_15(connection: sqlite3.Connection) -> None:
+    """Refresh category colors for better contrast against the basemap."""
+    colors = {
+        "What to do": "#C13C7A",
+        "Hotels": "#6842A6",
+        "Where to eat/drink": "#A83A2A",
+        "What to see": "#1758A6",
+        "Tips from the locals": "#765019",
+        "Information": "#174B4A",
+    }
+    connection.executemany(
+        "UPDATE categories SET color = ? WHERE name = ?",
+        ((color, name) for name, color in colors.items()),
+    )
+
+
+def _migration_16(connection: sqlite3.Connection) -> None:
+    """Give local tips a distinct red marker color."""
+    connection.execute("UPDATE categories SET color = '#C62828' WHERE name = 'Tips from the locals'")
+
+
+def _migration_17(connection: sqlite3.Connection) -> None:
+    """Give food and drink places a deep green marker color."""
+    connection.execute("UPDATE categories SET color = '#1E6B3A' WHERE name = 'Where to eat/drink'")
+
+
+def _migration_18(connection: sqlite3.Connection) -> None:
+    """Give hotels a warm brown marker color distinct from other categories."""
+    connection.execute("UPDATE categories SET color = '#8A4F27' WHERE name = 'Hotels'")
+
+
+def _migration_19(connection: sqlite3.Connection) -> None:
+    """Apply the selected category marker palette."""
+    colors = {
+        "What to do": "#CC79A7",
+        "Hotels": "#6A3D9A",
+        "Where to eat/drink": "#009E73",
+        "What to see": "#0072B2",
+        "Tips from the locals": "#D55E00",
+    }
+    connection.executemany(
+        "UPDATE categories SET color = ? WHERE name = ?",
+        ((color, name) for name, color in colors.items()),
+    )
+
+
+def _migration_20(connection: sqlite3.Connection) -> None:
+    """Restore the What to do and Hotels colors from the previous palette."""
+    connection.execute("UPDATE categories SET color = '#C13C7A' WHERE name = 'What to do'")
+    connection.execute("UPDATE categories SET color = '#8A4F27' WHERE name = 'Hotels'")
+
+
+MIGRATIONS = (_migration_1, _migration_2, _migration_3, _migration_4, _migration_5, _migration_6, _migration_7, _migration_8, _migration_9, _migration_10, _migration_11, _migration_12, _migration_13, _migration_14, _migration_15, _migration_16, _migration_17, _migration_18, _migration_19, _migration_20)
 
 
 def initialize_database(path: Path | None = None) -> Path:

@@ -1,125 +1,48 @@
 import { useEffect, useRef, useState } from 'react';
-import { Map, Marker, NavigationControl, setWorkerUrl } from 'maplibre-gl';
+import { createPortal } from 'react-dom';
+import { GeolocateControl, Map, Marker, NavigationControl, setWorkerUrl } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import { INITIAL_MAP_VIEW, MAP_STYLE_URL } from './config.js';
 import petassosStyle from './assets/petassos-style.json';
 import brightStyle from './assets/bright-style.json';
+import hikingStyle from './assets/hiking-style.json';
+import sketchStyle from './assets/sketch-map-style.json';
 import seaTextureUrl from './assets/petassos-sea.png';
+import sketchLandUrl from './assets/sketch-land.svg';
+import sketchWaterUrl from './assets/sketch-water.svg';
 import { categoryIconUrl, placeMarkerUrl, noteMarkerUrl } from './markerIcons.js';
 import { searchLocations } from './geocoder.js';
+import { GeoSearch, MapStyleControl, MapVisibilityControl } from './MapControls.jsx';
+import { NorthControl, TiltControl } from './mapControls.js';
+import {
+  addPlaceImages,
+  clamp,
+  containsPoint,
+  hasZoneBounds,
+  loadSvg,
+  rectangleBounds,
+  recordsGeoJSON,
+  zoneArea,
+  zoneLabelColor,
+  zonesGeoJSON,
+} from './mapData.js';
 
 setWorkerUrl(workerUrl);
 
-function loadSvg(url) {
-  return new Promise((resolve, reject) => {
-    const image = new Image();
-    image.onload = () => resolve(image);
-    image.onerror = reject;
-    image.src = url;
-  });
-}
+const LOCAL_STYLES = { petassos: petassosStyle, bright: brightStyle, sketch: sketchStyle, hiking: hikingStyle };
 
-function placeMarkerId(record) {
-  return `petassos-${record.category_color?.slice(1)}-${record.category_icon}`;
-}
-
-async function addPlaceImages(map, places) {
-  const markers = new globalThis.Map(places.map((place) => [placeMarkerId(place), place]));
-  await Promise.all([...markers].map(async ([id, place]) => {
-    if (map.hasImage(id)) return;
-    const image = await loadSvg(placeMarkerUrl(place.category_icon, place.category_color));
-    if (!map.hasImage(id)) map.addImage(id, image, { pixelRatio: 4 });
-  }));
-}
-
-function recordsGeoJSON(places, notes, selectedRecord, editingRecord, hoveredRecord = null) {
-  return {
-    type: 'FeatureCollection',
-    features: [...places, ...notes].filter((record) => (
-      record.kind !== editingRecord?.kind || record.id !== editingRecord.id
-    )).map((record) => ({
-      type: 'Feature',
-      geometry: { type: 'Point', coordinates: [record.longitude, record.latitude] },
-      properties: {
-        id: record.id,
-        kind: record.kind,
-        image: record.kind === 'NOTE' ? 'petassos-note' : placeMarkerId(record),
-        selected: selectedRecord?.kind === record.kind && selectedRecord.id === record.id,
-        hovered: hoveredRecord?.kind === record.kind && hoveredRecord.id === record.id,
-        dimmed: Boolean(record.preview_dimmed),
-      },
-    })),
-  };
-}
-
-function hasZoneBounds(zone) {
-  return Boolean(zone && [zone.min_lat, zone.max_lat, zone.min_lon, zone.max_lon].every(Number.isFinite));
-}
-
-function zoneArea(zone) {
-  return (zone.max_lat - zone.min_lat) * (zone.max_lon - zone.min_lon);
-}
-
-function containsPoint(zone, { lat, lng }) {
-  return zone.min_lat <= lat && lat <= zone.max_lat && zone.min_lon <= lng && lng <= zone.max_lon;
-}
-
-function zoneLabelColor(hoveredId = null) {
-  const normal = ['case', ['get', 'draft'], '#bd3d38', ['get', 'selected'], '#916111', '#a0a9ae'];
-  return hoveredId === null ? normal : ['case', ['==', ['get', 'id'], hoveredId], '#427c8b', normal];
-}
-
-function zoneFeature(zone, selected, active, draft = false) {
-  const { min_lat: south, max_lat: north, min_lon: west, max_lon: east } = zone;
-  return {
-    type: 'Feature',
-    geometry: { type: 'Polygon', coordinates: [[[west, south], [east, south], [east, north], [west, north], [west, south]]] },
-    properties: { id: zone.id ?? 0, selected, active, draft },
-  };
-}
-
-function zonesGeoJSON(mode, zones, selectedZoneId, zoneDraft) {
-  const active = mode === 'Zones' || mode === 'Sharing';
-  const isSelected = (id) => Array.isArray(selectedZoneId) ? selectedZoneId.includes(id) : id === selectedZoneId;
-  const visibleZones = zones.filter((zone) => zone.id !== zoneDraft?.id && hasZoneBounds(zone))
-    .sort((left, right) => zoneArea(right) - zoneArea(left) || left.id - right.id);
-  if (active && hasZoneBounds(zoneDraft)) visibleZones.push(zoneDraft);
-  return {
-    type: 'FeatureCollection',
-    features: [
-      ...visibleZones.map((zone) => zoneFeature(zone, zone === zoneDraft || isSelected(zone.id), active && (mode !== 'Sharing' || zone === zoneDraft || isSelected(zone.id)), zone === zoneDraft)),
-      ...visibleZones.filter((zone) => zone.name?.trim()).map((zone) => ({
-        type: 'Feature',
-        geometry: { type: 'Point', coordinates: [zone.min_lon, zone.max_lat] },
-        properties: { id: zone.id ?? 0, name: zone.name, active: active && (mode !== 'Sharing' || zone === zoneDraft || isSelected(zone.id)), selected: zone === zoneDraft || isSelected(zone.id), draft: zone === zoneDraft },
-      })),
-    ],
-  };
-}
-
-function rectangleBounds(first, second) {
-  const bounds = {
-    min_lat: Math.min(first.lat, second.lat), max_lat: Math.max(first.lat, second.lat),
-    min_lon: Math.min(first.lng, second.lng), max_lon: Math.max(first.lng, second.lng),
-  };
-  return bounds.max_lat - bounds.min_lat > 0.00001 && bounds.max_lon - bounds.min_lon > 0.00001 ? bounds : null;
-}
-
-function clamp(value, minimum, maximum) {
-  return Math.min(maximum, Math.max(minimum, value));
-}
-
-export default function MapView({ mapAction, mode, places, notes, zones, selectedZoneId, zoneDraft, categories, hiddenCategoryIds, notesVisible, onToggleCategory, onToggleNotes, onShowAll, onHideAll, picking, draftKind, draftLocation, editingRecord, editingCategory, selectedRecord, onPickLocation, onMoveDraftLocation, onSelectRecord, onDeselectRecord, onSelectZone, onDeselectZone, onZoneBoundsChange, onZoneDrawingChange, onViewportChange, sharing = false, showNotesOption = true }) {
+export default function MapView({ mapAction, mode, places, notes, zones, selectedZoneId, zoneDraft, zoneBoundsLocked = false, categories, hiddenCategoryIds, notesVisible, onToggleCategory, onToggleNotes, onShowAll, onHideAll, picking, draftKind, draftLocation, editingRecord, editingCategory, selectedRecord, onPickLocation, onMoveDraftLocation, onSelectRecord, onDeselectRecord, onSelectZone, onDeselectZone, onZoneBoundsChange, onZoneDrawingChange, onViewportChange, onEmptyMapClick, sharing = false, showNotesOption = true, geolocate = true }) {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
   const adminCameraRef = useRef(null);
   const adminSearchRef = useRef(null);
   const [mapReady, setMapReady] = useState(false);
+  const [topRightControlNode, setTopRightControlNode] = useState(null);
   const draftMarkerRef = useRef(null);
   const zoneHandlesRef = useRef([]);
   const zoneAnchorRef = useRef(null);
-  const selectedStyleRef = useRef('bright');
+  const selectedStyleRef = useRef('hiking');
   const placesRef = useRef(places);
   const notesRef = useRef(notes);
   const selectedRecordRef = useRef(selectedRecord);
@@ -129,18 +52,20 @@ export default function MapView({ mapAction, mode, places, notes, zones, selecte
   const zonesRef = useRef(zones);
   const selectedZoneIdRef = useRef(selectedZoneId);
   const zoneDraftRef = useRef(zoneDraft);
+  const zoneBoundsLockedRef = useRef(zoneBoundsLocked);
   const pickingRef = useRef(picking);
   const onPickLocationRef = useRef(onPickLocation);
   const onMoveDraftLocationRef = useRef(onMoveDraftLocation);
   const onSelectRecordRef = useRef(onSelectRecord);
   const onDeselectRecordRef = useRef(onDeselectRecord);
+  const onEmptyMapClickRef = useRef(onEmptyMapClick);
   const onSelectZoneRef = useRef(onSelectZone);
   const onDeselectZoneRef = useRef(onDeselectZone);
   const onZoneBoundsChangeRef = useRef(onZoneBoundsChange);
   const onZoneDrawingChangeRef = useRef(onZoneDrawingChange);
   const onViewportChangeRef = useRef(onViewportChange);
   const geoRequestRef = useRef(null);
-  const [selectedStyle, setSelectedStyle] = useState('bright');
+  const [selectedStyle, setSelectedStyle] = useState('hiking');
   const [styleMenuOpen, setStyleMenuOpen] = useState(false);
   const [visibilityOpen, setVisibilityOpen] = useState(false);
   const [mapError, setMapError] = useState('');
@@ -157,11 +82,13 @@ export default function MapView({ mapAction, mode, places, notes, zones, selecte
   zonesRef.current = zones;
   selectedZoneIdRef.current = selectedZoneId;
   zoneDraftRef.current = zoneDraft;
+  zoneBoundsLockedRef.current = zoneBoundsLocked;
   pickingRef.current = picking;
   onPickLocationRef.current = onPickLocation;
   onMoveDraftLocationRef.current = onMoveDraftLocation;
   onSelectRecordRef.current = onSelectRecord;
   onDeselectRecordRef.current = onDeselectRecord;
+  onEmptyMapClickRef.current = onEmptyMapClick;
   onSelectZoneRef.current = onSelectZone;
   onDeselectZoneRef.current = onDeselectZone;
   onZoneBoundsChangeRef.current = onZoneBoundsChange;
@@ -191,12 +118,12 @@ export default function MapView({ mapAction, mode, places, notes, zones, selecte
   }, [mode, zones, selectedZoneId, zoneDraft]);
 
   useEffect(() => {
-    if (!zoneDraft) zoneAnchorRef.current = null;
-  }, [zoneDraft]);
+    if (!zoneDraft || zoneBoundsLocked) zoneAnchorRef.current = null;
+  }, [zoneDraft, zoneBoundsLocked]);
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !['Zones', 'Sharing'].includes(mode) || !hasZoneBounds(zoneDraft) || zoneAnchorRef.current) {
+    if (!map || !['Zones', 'Sharing'].includes(mode) || !hasZoneBounds(zoneDraft) || zoneBoundsLocked || zoneAnchorRef.current) {
       zoneHandlesRef.current.forEach(({ marker }) => marker.remove());
       zoneHandlesRef.current = [];
       return;
@@ -238,7 +165,7 @@ export default function MapView({ mapAction, mode, places, notes, zones, selecte
       });
     }
     zoneHandlesRef.current.forEach(({ corner, marker }) => marker.setLngLat(corners[corner]));
-  }, [mode, zoneDraft]);
+  }, [mode, zoneDraft, zoneBoundsLocked]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -264,6 +191,7 @@ export default function MapView({ mapAction, mode, places, notes, zones, selecte
     const element = draftMarkerRef.current.getElement();
     element.classList.toggle('editing-marker', Boolean(editingRecord));
     element.classList.toggle('note-marker', (editingRecord?.kind ?? draftKind) === 'NOTE');
+    element.classList.toggle('information-marker', editingRecord?.kind === 'PLACE' && (editingCategory?.marker_style ?? editingRecord.category_marker_style) === 'information');
     element.title = 'Drag to adjust position';
     element.style.backgroundColor = editingRecord?.kind === 'PLACE' ? (editingCategory?.color ?? editingRecord.category_color) : '';
     if (editingRecord) {
@@ -273,7 +201,9 @@ export default function MapView({ mapAction, mode, places, notes, zones, selecte
         icon.alt = '';
         element.replaceChildren(icon);
       }
-      const url = editingRecord.kind === 'PLACE' ? categoryIconUrl(editingCategory?.icon ?? editingRecord.category_icon, 60) : noteMarkerUrl;
+      const url = editingRecord.kind === 'PLACE' && element.classList.contains('information-marker')
+        ? placeMarkerUrl(editingCategory?.icon ?? editingRecord.category_icon, editingCategory?.color ?? editingRecord.category_color, 'information')
+        : editingRecord.kind === 'PLACE' ? categoryIconUrl(editingCategory?.icon ?? editingRecord.category_icon, 60) : noteMarkerUrl;
       if (icon.src !== url) icon.src = url;
     } else if (element.textContent !== '?') {
       element.textContent = '?';
@@ -365,22 +295,49 @@ export default function MapView({ mapAction, mode, places, notes, zones, selecte
     if (!containerRef.current) return undefined;
 
     let map;
+    let customControls;
     let hoveredZoneId = null;
+    let emptyMapClickTimer = null;
+    let ignoreEmptyClickUntil = 0;
     try {
       map = new Map({
         container: containerRef.current,
-        style: brightStyle,
+        style: LOCAL_STYLES.hiking,
         center: INITIAL_MAP_VIEW.center,
         zoom: INITIAL_MAP_VIEW.zoom,
         attributionControl: true,
       });
       mapRef.current = map;
+      map.on('zoomend', () => console.log('Zoom :', map.getZoom().toFixed(2)));
       if (window.matchMedia('(max-width: 700px)').matches) {
         const attribution = map.getContainer().querySelector('.maplibregl-ctrl-attrib');
         attribution?.classList.remove('maplibregl-compact-show');
         attribution?.removeAttribute('open');
       }
       map.addControl(new NavigationControl({ showCompass: false }), 'top-right');
+      const topRightContainer = map.getContainer().querySelector('.maplibregl-ctrl-top-right');
+      customControls = document.createElement('div');
+      customControls.className = 'maplibregl-ctrl map-custom-controls';
+      topRightContainer?.appendChild(customControls);
+      setTopRightControlNode(customControls);
+      if (geolocate) map.addControl(new GeolocateControl({ trackUserLocation: true }), 'bottom-right');
+      map.addControl(new NorthControl(), 'bottom-right');
+      map.addControl(new TiltControl(), 'bottom-right');
+      const cancelEmptyClickForZoom = () => {
+        if (emptyMapClickTimer !== null) {
+          window.clearTimeout(emptyMapClickTimer);
+          emptyMapClickTimer = null;
+        }
+        ignoreEmptyClickUntil = Date.now() + 600;
+      };
+      map.on('dblclick', cancelEmptyClickForZoom);
+      map.on('zoomstart', cancelEmptyClickForZoom);
+      map.on('touchstart', () => {
+        if (emptyMapClickTimer !== null) {
+          window.clearTimeout(emptyMapClickTimer);
+          emptyMapClickTimer = null;
+        }
+      });
       const updateViewport = () => {
         const bounds = map.getBounds();
         onViewportChangeRef.current({
@@ -430,11 +387,15 @@ export default function MapView({ mapAction, mode, places, notes, zones, selecte
         }
       });
       map.on('click', (event) => {
+        if (emptyMapClickTimer !== null) {
+          window.clearTimeout(emptyMapClickTimer);
+          emptyMapClickTimer = null;
+        }
         if (pickingRef.current) {
           onPickLocationRef.current({ latitude: event.lngLat.lat, longitude: event.lngLat.lng });
           return;
         }
-        if (['Zones', 'Sharing'].includes(modeRef.current) && zoneDraftRef.current && (zoneAnchorRef.current || !hasZoneBounds(zoneDraftRef.current))) {
+        if (['Zones', 'Sharing'].includes(modeRef.current) && zoneDraftRef.current && !zoneBoundsLockedRef.current && (zoneAnchorRef.current || !hasZoneBounds(zoneDraftRef.current))) {
           if (!zoneAnchorRef.current) {
             zoneAnchorRef.current = event.lngLat;
             onZoneDrawingChangeRef.current(true);
@@ -474,8 +435,24 @@ export default function MapView({ mapAction, mode, places, notes, zones, selecte
             return;
           }
         }
-        onDeselectRecordRef.current();
-        onDeselectZoneRef.current();
+        const hadSelectedRecord = Boolean(selectedRecordRef.current);
+        const deferEmptyClick = Boolean(
+          onEmptyMapClickRef.current && window.matchMedia('(max-width: 700px)').matches,
+        );
+        if (deferEmptyClick) {
+          if (Date.now() < ignoreEmptyClickUntil) return;
+          if ((event.originalEvent?.detail ?? 1) > 1) return;
+          emptyMapClickTimer = window.setTimeout(() => {
+            emptyMapClickTimer = null;
+            onDeselectRecordRef.current();
+            onDeselectZoneRef.current();
+            onEmptyMapClickRef.current?.({ hadSelectedRecord });
+          }, 150);
+        } else {
+          onDeselectRecordRef.current();
+          onDeselectZoneRef.current();
+          onEmptyMapClickRef.current?.({ hadSelectedRecord });
+        }
       });
       let styleLoadId = 0;
       map.on('style.load', async () => {
@@ -533,19 +510,36 @@ export default function MapView({ mapAction, mode, places, notes, zones, selecte
             setMapError('The sea texture could not load.');
           }
         }
+        if (selectedStyleRef.current === 'sketch') {
+          try {
+            const [land, water] = await Promise.all([loadSvg(sketchLandUrl), loadSvg(sketchWaterUrl)]);
+            if (currentLoadId === styleLoadId) {
+              map.addImage('sketch-land', land, { pixelRatio: 2 });
+              map.addImage('sketch-water', water, { pixelRatio: 2 });
+              map.setPaintProperty('background', 'background-pattern', 'sketch-land');
+              map.setPaintProperty('water', 'fill-pattern', 'sketch-water');
+            }
+          } catch {
+            setMapError('The sketch textures could not load.');
+          }
+        }
         try {
           const [noteImage] = await Promise.all([
             loadSvg(noteMarkerUrl),
             addPlaceImages(map, placesRef.current),
           ]);
           if (currentLoadId !== styleLoadId) return;
-          map.addImage('petassos-note', noteImage, { pixelRatio: 4 });
+          if (!map.hasImage('petassos-note')) {
+            map.addImage('petassos-note', noteImage, { pixelRatio: 4 });
+          }
           map.addLayer({
             id: 'admin-record-icons', type: 'symbol', source: 'admin-records',
             layout: {
               'icon-image': ['get', 'image'],
               'icon-size': ['case', ['get', 'selected'],
-                ['case', ['==', ['get', 'kind'], 'NOTE'], 1.45, 44 / 31], ['get', 'hovered'], 1.15, 1],
+                ['case', ['==', ['get', 'kind'], 'NOTE'], 1.45, ['get', 'special'], 1.75, 44 / 31],
+                ['get', 'hovered'], ['case', ['get', 'special'], 1.6, 1.15],
+                ['get', 'special'], 1.45, 1],
               'symbol-sort-key': ['case', ['get', 'selected'], 2, ['get', 'hovered'], 1, ['get', 'dimmed'], -1, 0],
               'icon-allow-overlap': true,
               'icon-ignore-placement': true,
@@ -566,12 +560,15 @@ export default function MapView({ mapAction, mode, places, notes, zones, selecte
     }
 
     return () => {
+      if (emptyMapClickTimer !== null) window.clearTimeout(emptyMapClickTimer);
       geoRequestRef.current?.abort();
       draftMarkerRef.current?.remove();
       draftMarkerRef.current = null;
       zoneHandlesRef.current.forEach(({ marker }) => marker.remove());
       zoneHandlesRef.current = [];
       mapRef.current = null;
+      customControls?.remove();
+      setTopRightControlNode(null);
       map?.remove();
     };
   }, []);
@@ -628,99 +625,47 @@ export default function MapView({ mapAction, mode, places, notes, zones, selecte
     selectedStyleRef.current = style;
     setSelectedStyle(style);
     setMapError('');
-    mapRef.current?.setStyle(style === 'petassos' ? petassosStyle : style === 'bright' ? brightStyle : MAP_STYLE_URL);
+    mapRef.current?.setStyle(LOCAL_STYLES[style] ?? MAP_STYLE_URL);
   }
 
   return (
     <div className="map-area">
       <div className="map-canvas" ref={containerRef} aria-label="Interactive map of Crete" />
-      <form className="geo-search" role="search" aria-label="Search a geographic location" onSubmit={submitGeoSearch}>
-        <input
-          type="search"
-          aria-label="City or address"
-          placeholder="Search a city or address"
-          value={geoQuery}
-          onChange={(event) => {
-            geoRequestRef.current?.abort();
-            setGeoQuery(event.target.value);
-            setGeoResults(null);
-            setGeoError('');
-          }}
-          onKeyDown={(event) => { if (event.key === 'Escape') setGeoResults(null); }}
+      <GeoSearch
+        query={geoQuery}
+        results={geoResults}
+        busy={geoBusy}
+        error={geoError}
+        onSubmit={submitGeoSearch}
+        onEscape={() => setGeoResults(null)}
+        onChange={(event) => {
+          geoRequestRef.current?.abort();
+          setGeoQuery(event.target.value);
+          setGeoResults(null);
+          setGeoError('');
+        }}
+        onChoose={chooseGeoResult}
+      />
+      {topRightControlNode && createPortal(<>
+        <MapStyleControl
+          selectedStyle={selectedStyle}
+          open={styleMenuOpen}
+          onToggle={() => { setVisibilityOpen(false); setStyleMenuOpen((open) => !open); }}
+          onChoose={chooseStyle}
         />
-        <button type="submit" disabled={!geoQuery.trim() || geoBusy}>{geoBusy ? 'Searching…' : 'Search'}</button>
-        {(geoResults !== null || geoError) && <div className="geo-search-results" aria-live="polite">
-          {geoError ? <p>{geoError}</p> : geoResults.length ? geoResults.map((result, index) => (
-            <button key={`${result.latitude}-${result.longitude}-${index}`} type="button" onClick={() => chooseGeoResult(result)}>{result.label}</button>
-          )) : <p>No location found.</p>}
-          <small>Search data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a></small>
-        </div>}
-      </form>
-      {(categories.length > 0 || showNotesOption) && <div className="map-visibility-picker">
-        {visibilityOpen && <div className="map-visibility-panel" id="map-visibility-options" aria-label="Map marker visibility">
-          <strong>Show on map</strong>
-          <div className="map-visibility-actions">
-            <button type="button" onClick={onShowAll} disabled={hiddenCategoryIds.length === 0 && (!showNotesOption || notesVisible)}>Select all</button>
-            <button type="button" onClick={onHideAll} disabled={hiddenCategoryIds.length === categories.length && (!showNotesOption || !notesVisible)}>Deselect all</button>
-          </div>
-          <div className="map-visibility-options">
-            {categories.map((category) => (
-              <label className="map-visibility-option" key={category.id}>
-                <span className="category-icon" style={{ background: category.color }}><img src={categoryIconUrl(category.icon)} alt="" /></span>
-                <span>{category.name}</span>
-                <input type="checkbox" role="switch" checked={!hiddenCategoryIds.includes(category.id)} onChange={() => onToggleCategory(category.id)} />
-                <span className="map-visibility-switch" aria-hidden="true" />
-              </label>
-            ))}
-            {showNotesOption && <label className="map-visibility-option map-visibility-note">
-              <img src={noteMarkerUrl} alt="" />
-              <span>Notes</span>
-              <input type="checkbox" role="switch" checked={notesVisible} onChange={onToggleNotes} />
-              <span className="map-visibility-switch" aria-hidden="true" />
-            </label>}
-          </div>
-        </div>}
-        <button
-          className="map-style-trigger map-visibility-trigger"
-          type="button"
-          aria-label="Marker visibility"
-          title="Marker visibility"
-          aria-pressed={visibilityOpen}
-          aria-expanded={visibilityOpen}
-          aria-controls="map-visibility-options"
-          onClick={() => { setStyleMenuOpen(false); setVisibilityOpen((open) => !open); }}
-        >
-          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M12 21s-6-5.1-6-11a6 6 0 1 1 12 0c0 5.9-6 11-6 11Z" />
-            <circle cx="12" cy="10" r="2.2" />
-          </svg>
-        </button>
-      </div>}
-      <div className="map-style-picker">
-        {styleMenuOpen && (
-          <div className="map-style-options" id="map-style-options">
-            <button type="button" aria-pressed={selectedStyle === 'petassos'} onClick={() => chooseStyle('petassos')}>Petassos</button>
-            <button type="button" aria-pressed={selectedStyle === 'positron'} onClick={() => chooseStyle('positron')}>Positron</button>
-            <button type="button" aria-pressed={selectedStyle === 'bright'} onClick={() => chooseStyle('bright')}>Bright</button>
-          </div>
-        )}
-        <button
-          className="map-style-trigger"
-          type="button"
-          aria-label="Map layers"
-          title="Map layers"
-          aria-pressed={styleMenuOpen}
-          aria-expanded={styleMenuOpen}
-          aria-controls="map-style-options"
-          onClick={() => { setVisibilityOpen(false); setStyleMenuOpen((open) => !open); }}
-        >
-          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="m12 3 9 5-9 5-9-5 9-5Z" />
-            <path d="m3 12 9 5 9-5" />
-            <path d="m3 16 9 5 9-5" />
-          </svg>
-        </button>
-      </div>
+        <MapVisibilityControl
+          categories={categories}
+          hiddenCategoryIds={hiddenCategoryIds}
+          notesVisible={notesVisible}
+          showNotesOption={showNotesOption}
+          open={visibilityOpen}
+          onToggle={() => { setStyleMenuOpen(false); setVisibilityOpen((open) => !open); }}
+          onToggleCategory={onToggleCategory}
+          onToggleNotes={onToggleNotes}
+          onShowAll={onShowAll}
+          onHideAll={onHideAll}
+        />
+      </>, topRightControlNode)}
       {mapError && <p className="map-error" role="alert">{mapError}</p>}
     </div>
   );

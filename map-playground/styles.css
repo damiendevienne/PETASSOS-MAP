@@ -1,0 +1,74 @@
+:root {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #273a34;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  --ink: #273a34;
+  --muted: #78827a;
+  --line: #e8e5dc;
+  --panel: rgba(253, 252, 247, .97);
+}
+
+* { box-sizing: border-box; }
+html, body, #map { width: 100%; height: 100%; margin: 0; }
+body { overflow: hidden; }
+#map { position: absolute; inset: 0; }
+
+.maplibregl-ctrl-group { overflow: hidden; border: 1px solid rgba(32, 48, 39, .12) !important; border-radius: 9px !important; box-shadow: 0 2px 9px rgba(32, 48, 39, .12) !important; }
+.maplibregl-ctrl-attrib { background: rgba(255, 255, 255, .88) !important; }
+.maplibregl-ctrl-top-right { top: 16px; right: 16px; }
+.maplibregl-ctrl-bottom-left { bottom: 14px; left: 12px; }
+
+.style-panel { position: absolute; z-index: 3; top: 16px; left: 16px; width: 318px; max-height: calc(100vh - 32px); overflow: auto; padding: 20px; border: 1px solid rgba(52, 66, 57, .1); border-radius: 17px; background: var(--panel); box-shadow: 0 12px 38px rgba(34, 46, 37, .16); backdrop-filter: blur(18px); }
+.panel-header { display: flex; align-items: center; justify-content: space-between; }
+.eyebrow { margin: 0 0 6px; color: #8a8d78; font-size: 9px; font-weight: 700; letter-spacing: .15em; }
+h1 { margin: 0; color: var(--ink); font: 500 24px/1.1 Georgia, "Times New Roman", serif; letter-spacing: -.025em; }
+.live-indicator { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border: 1px solid #e3eade; border-radius: 20px; color: #587061; font-size: 9px; font-weight: 700; letter-spacing: .1em; }
+.live-indicator i { width: 6px; height: 6px; border-radius: 50%; background: #78a27d; box-shadow: 0 0 0 3px rgba(120, 162, 125, .14); }
+.intro { margin: 13px 0 16px; color: #737d75; font-size: 11px; line-height: 1.55; }
+fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+legend { margin-bottom: 9px; color: #647168; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.palette-section { padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+.palette-list { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
+.palette-button { display: grid; justify-items: center; gap: 6px; min-width: 0; padding: 8px 4px; border: 1px solid transparent; border-radius: 10px; color: #536259; background: transparent; font-family: inherit; font-size: 9px; font-weight: 500; cursor: pointer; }
+.palette-button:hover { background: #f4f2e9; }
+.palette-button.active { border-color: #dce2d6; color: #30483d; background: #f0f2e9; }
+.palette-dots { display: flex; width: 48px; height: 22px; padding: 3px; overflow: hidden; border: 1px solid rgba(40, 50, 43, .11); border-radius: 7px; }
+.palette-dots i { flex: 1; border-radius: 3px; }
+.olive-dots { background: #f2eddf; }.olive-dots i:nth-child(1) { background: #e5dec9; }.olive-dots i:nth-child(2) { background: #a9cbc8; }.olive-dots i:nth-child(3) { background: #fffaf0; }
+.coast-dots { background: #102d3b; }.coast-dots i:nth-child(1) { background: #244553; }.coast-dots i:nth-child(2) { background: #39727b; }.coast-dots i:nth-child(3) { background: #94aaa3; }
+.field-dots { background: #edf0df; }.field-dots i:nth-child(1) { background: #d9e0cb; }.field-dots i:nth-child(2) { background: #a9c9c4; }.field-dots i:nth-child(3) { background: #fff9e9; }
+
+.colors-section { padding: 15px 0 4px; }
+.color-control { display: grid; gap: 3px; }
+.color-row { position: relative; display: flex; align-items: center; gap: 8px; min-height: 34px; color: #495a51; font-size: 11px; }
+.color-row label { flex: 1; cursor: text; }
+.color-row input { flex: 0 0 78px; width: 78px; height: 27px; padding: 3px 6px; border: 1px solid #e3e1d8; border-radius: 7px; outline: none; color: #43564c; background: #fffefa; font: 10px ui-monospace, SFMono-Regular, Consolas, monospace; text-align: center; text-transform: uppercase; }
+.color-row input:focus { border-color: #82998a; box-shadow: 0 0 0 2px rgba(130, 153, 138, .14); }
+.color-row input.invalid { border-color: #bc6254; color: #a13d31; background: #fff3ef; }
+.color-picker { position: relative; flex: 0 0 29px; }
+.color-picker summary { display: grid; width: 29px; height: 27px; place-items: center; list-style: none; border: 1px solid #e3e1d8; border-radius: 7px; background: #fffefa; cursor: pointer; }
+.color-picker summary::-webkit-details-marker { display: none; }
+.color-picker summary span { width: 17px; height: 17px; border: 1px solid rgba(30, 40, 35, .18); border-radius: 4px; }
+.color-popover { position: absolute; z-index: 6; top: 32px; right: 0; display: none; width: 218px; padding: 10px; border: 1px solid rgba(56, 68, 58, .12); border-radius: 11px; background: #fffefa; box-shadow: 0 10px 28px rgba(36, 48, 39, .2); }
+.color-picker[open] .color-popover { display: block; }
+.color-control .color-row:last-child .color-popover { top: auto; bottom: 32px; }
+.swatch-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 7px; }
+.swatch-option { width: 25px; height: 25px; justify-self: center; border: 1px solid rgba(30, 40, 35, .14); border-radius: 7px; cursor: pointer; }
+.swatch-option:hover, .swatch-option:focus-visible { outline: 2px solid #718a7c; outline-offset: 1px; }
+.hex-hint { margin: 6px 0 0; color: #92968b; font-size: 9px; }
+.export-button { width: 100%; margin-top: 13px; padding: 11px 12px; border: 0; border-radius: 9px; color: #fffdf6; background: #36594c; font-family: inherit; font-size: 11px; font-weight: 600; cursor: pointer; transition: background .15s ease, transform .15s ease; }
+.export-button:hover:not(:disabled) { transform: translateY(-1px); background: #294a3e; }
+.export-button:disabled { opacity: .48; cursor: wait; }
+.export-note, .export-status { margin: 7px 0 0; color: #858d82; font-size: 9px; text-align: center; }
+.export-status { min-height: 11px; color: #52735f; font-weight: 600; }
+button:focus-visible, summary:focus-visible { outline: 2px solid #718a7c; outline-offset: 2px; }
+
+@media (max-width: 500px) {
+  .style-panel { top: 10px; left: 10px; width: min(318px, calc(100vw - 76px)); max-height: min(80vh, 610px); padding: 15px; }
+  .panel-header h1 { font-size: 21px; }
+  .intro { margin: 10px 0 12px; font-size: 10px; }
+  .palette-button { font-size: 8px; }
+  .maplibregl-ctrl-top-right { top: 10px; right: 10px; }
+}

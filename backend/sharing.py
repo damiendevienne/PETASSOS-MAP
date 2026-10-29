@@ -46,9 +46,12 @@ def _values(connection, shared_map: SharedMapInput, *, creating: bool) -> tuple:
         raise HTTPException(status_code=422, detail="Expiry must be in the future")
     for table, ids in (("zones", zone_ids), ("categories", category_ids)):
         placeholders = ",".join("?" for _ in ids)
-        count = connection.execute(
-            f"SELECT COUNT(*) FROM {table} WHERE id IN ({placeholders})", ids
-        ).fetchone()[0]
+        if table == "zones":
+            query = f"SELECT COUNT(*) FROM zones WHERE id IN ({placeholders}) AND archived_at IS NULL"
+        else:
+            query = (f"SELECT COUNT(*) FROM categories WHERE id IN ({placeholders}) "
+                     "AND NOT EXISTS (SELECT 1 FROM categories child WHERE child.parent_id = categories.id)")
+        count = connection.execute(query, ids).fetchone()[0]
         if count != len(ids):
             raise HTTPException(status_code=422, detail=f"Select existing {table}")
     return (
@@ -151,26 +154,37 @@ def public_shared_map(token: str) -> dict:
         link = _active_link(connection, token)
         map_id = link["id"]
         categories = connection.execute(
-            "SELECT categories.id, categories.name, categories.icon, categories.color "
+            "SELECT categories.id, categories.name, categories.icon, "
+            "COALESCE(parent.color, categories.color) AS color, "
+            "categories.parent_id, parent.name AS parent_name, parent.icon AS parent_icon, "
+            "COALESCE(parent.marker_style, categories.marker_style) AS marker_style "
             "FROM categories JOIN share_link_categories ON categories.id = share_link_categories.category_id "
-            "WHERE share_link_categories.share_link_id = ? ORDER BY categories.name", (map_id,)
+            "LEFT JOIN categories parent ON parent.id = categories.parent_id "
+            "WHERE share_link_categories.share_link_id = ? "
+            "ORDER BY COALESCE(parent.sort_order, categories.sort_order), categories.sort_order", (map_id,)
         ).fetchall()
         zones = connection.execute(
-            "SELECT zones.id, zones.name, zones.min_lat, zones.max_lat, zones.min_lon, zones.max_lon "
+            "SELECT zones.id, zones.name, zones.about_title, zones.about_text, "
+            "zones.min_lat, zones.max_lat, zones.min_lon, zones.max_lon "
             "FROM zones JOIN share_link_zones ON zones.id = share_link_zones.zone_id "
-            "WHERE share_link_zones.share_link_id = ? ORDER BY zones.name", (map_id,)
+            "WHERE share_link_zones.share_link_id = ? AND zones.archived_at IS NULL "
+            "ORDER BY zones.name", (map_id,)
         ).fetchall()
         places = connection.execute(
-            "SELECT places.id, places.kind, places.name, places.description, places.author, "
+            "SELECT places.id, places.kind, places.name, places.description, places.author, places.link_url, "
             "places.latitude, places.longitude, places.category_id, "
-            "categories.name AS category_name, categories.icon AS category_icon, "
-            "categories.color AS category_color "
+            "categories.name AS category_name, parent.name AS category_parent_name, "
+            "categories.icon AS category_icon, "
+            "COALESCE(parent.color, categories.color) AS category_color, "
+            "COALESCE(parent.marker_style, categories.marker_style) AS category_marker_style "
             "FROM places JOIN categories ON places.category_id = categories.id "
-            "WHERE places.kind = 'PLACE' AND places.published = 1 "
+            "LEFT JOIN categories parent ON parent.id = categories.parent_id "
+            "WHERE places.kind = 'PLACE' AND places.published = 1 AND places.archived_at IS NULL "
             "AND EXISTS (SELECT 1 FROM share_link_categories sc "
             "WHERE sc.share_link_id = ? AND sc.category_id = places.category_id) "
             "AND EXISTS (SELECT 1 FROM share_link_zones sz JOIN zones z ON z.id = sz.zone_id "
-            "WHERE sz.share_link_id = ? AND places.latitude BETWEEN z.min_lat AND z.max_lat "
+            "WHERE sz.share_link_id = ? AND z.archived_at IS NULL "
+            "AND places.latitude BETWEEN z.min_lat AND z.max_lat "
             "AND places.longitude BETWEEN z.min_lon AND z.max_lon) "
             "ORDER BY places.name COLLATE NOCASE, places.id", (map_id, map_id),
         ).fetchall()
@@ -214,10 +228,12 @@ def public_place_image(token: str, image_id: int):
             "SELECT place_images.file_path FROM place_images "
             "JOIN places ON places.id = place_images.place_id "
             "WHERE place_images.id = ? AND places.kind = 'PLACE' AND places.published = 1 "
+            "AND places.archived_at IS NULL "
             "AND EXISTS (SELECT 1 FROM share_link_categories sc "
             "WHERE sc.share_link_id = ? AND sc.category_id = places.category_id) "
             "AND EXISTS (SELECT 1 FROM share_link_zones sz JOIN zones z ON z.id = sz.zone_id "
-            "WHERE sz.share_link_id = ? AND places.latitude BETWEEN z.min_lat AND z.max_lat "
+            "WHERE sz.share_link_id = ? AND z.archived_at IS NULL "
+            "AND places.latitude BETWEEN z.min_lat AND z.max_lat "
             "AND places.longitude BETWEEN z.min_lon AND z.max_lon)",
             (image_id, link["id"], link["id"]),
         ).fetchone()

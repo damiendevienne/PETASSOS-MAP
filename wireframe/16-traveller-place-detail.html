@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Traveller PLACE detail · Petassos UI wireframes</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="traveller-page detail-page">
+  <header class="site-header traveller-header">
+    <div class="traveller-brandstack">
+      <a class="brand" href="index.html"><img src="../img/petassos-logo.svg" alt="Petassos Travel"></a>
+      <strong class="traveller-title">PUBLIC MAP TITLE</strong>
+    </div>
+  </header>
+  <main class="stage">
+    <div class="map detail-map">
+      <div class="markers"><i class="marker m1">⌂</i><i class="marker m2">⌖</i><i class="marker active detail-selected"></i></div>
+      <span class="current-location" title="Your current position"></span>
+      <button class="location-control" aria-label="Centre on my location">⊙</button>
+      <div class="geo-search"><span class="search-icon">⌕</span>Search a city, address or place</div>
+      <span class="map-note">MapLibre · OpenFreeMap</span>
+    </div>
+    <section class="detail-sheet">
+      <div class="detail-handle"><i></i></div>
+      <div class="detail-inner">
+        <div class="detail-sheet-heading">
+          <div><p class="overline">PLACE DETAILS</p><h1>PLACE NAME</h1></div>
+          <a class="btn quiet" href="14-traveller-desktop.html">× <span>Close</span></a>
+        </div>
+        <div class="detail-grid">
+          <div class="detail-photo">IMAGE <small>Optional image caption</small></div>
+          <div class="detail-description">
+            <span class="detail-category"><i class="dot restaurant"></i> RESTAURANT</span>
+            <p class="detail-author">By AUTHOR NAME · Chania, Crete</p>
+            <p>A full place description appears here. Travellers can read the practical details and context added by Petassos.</p>
+            <div class="detail-gallery"><span>IMAGE 2 · CAPTION</span><span>IMAGE 3 · CAPTION</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

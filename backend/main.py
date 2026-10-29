@@ -4,19 +4,21 @@ from contextlib import asynccontextmanager
 from contextlib import closing
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, Response
-from pydantic import BaseModel, Field
+from pydantic import AnyHttpUrl, BaseModel, Field
 
 if __package__:
     from .auth import (
         COOKIE_NAME,
         COOKIE_PATH,
         SESSION_LIFETIME_SECONDS,
+        AuthPrincipal,
         AuthSettings,
+        authenticate,
         create_session,
-        credentials_match,
         load_auth_settings,
+        require_superadmin,
         revoke_session,
-        session_is_valid,
+        session_identity,
     )
     from .database import connect_database, initialize_database
     from .images import router as images_router, remove_record_files
@@ -27,12 +29,14 @@ else:
         COOKIE_NAME,
         COOKIE_PATH,
         SESSION_LIFETIME_SECONDS,
+        AuthPrincipal,
         AuthSettings,
+        authenticate,
         create_session,
-        credentials_match,
         load_auth_settings,
+        require_superadmin,
         revoke_session,
-        session_is_valid,
+        session_identity,
     )
     from database import connect_database, initialize_database
     from images import router as images_router, remove_record_files
@@ -67,10 +71,11 @@ def auth_settings(request: Request) -> AuthSettings:
 
 def require_admin(
     request: Request, settings: AuthSettings = Depends(auth_settings)
-) -> str:
-    if not session_is_valid(settings, request.cookies.get(COOKIE_NAME)):
+) -> AuthPrincipal:
+    principal = session_identity(settings, request.cookies.get(COOKIE_NAME))
+    if principal is None:
         raise HTTPException(status_code=401, detail="Admin session required")
-    return settings.username
+    return principal
 
 
 @app.post("/api/admin/login")
@@ -79,11 +84,12 @@ def admin_login(
     response: Response,
     settings: AuthSettings = Depends(auth_settings),
 ) -> dict[str, object]:
-    if not credentials_match(settings, credentials.username, credentials.password):
+    principal = authenticate(settings, credentials.username, credentials.password)
+    if principal is None:
         raise HTTPException(status_code=401, detail="Invalid credentials")
     response.set_cookie(
         COOKIE_NAME,
-        create_session(settings),
+        create_session(settings, principal),
         max_age=SESSION_LIFETIME_SECONDS,
         path=COOKIE_PATH,
         secure=settings.cookie_secure,
@@ -91,7 +97,7 @@ def admin_login(
         samesite="lax",
     )
     response.headers["Cache-Control"] = "no-store"
-    return {"authenticated": True, "username": settings.username}
+    return {"authenticated": True, "username": principal.username, "role": principal.role}
 
 
 admin_router = APIRouter(prefix="/api/admin", dependencies=[Depends(require_admin)])
@@ -104,28 +110,44 @@ class NewRecord(BaseModel):
     longitude: float = Field(ge=-180, le=180)
     description: str = ""
     author: str = ""
+    link_url: AnyHttpUrl | None = None
     published: bool = False
+
+
+class ArchiveInput(BaseModel):
+    archived: bool
 
 
 @admin_router.get("/categories")
 def admin_categories() -> list[dict]:
     with closing(connect_database()) as connection:
         rows = connection.execute(
-            "SELECT id, name, icon, color FROM categories ORDER BY name"
+            "SELECT categories.id, categories.name, categories.icon, "
+            "COALESCE(parent.color, categories.color) AS color, "
+            "categories.parent_id, parent.name AS parent_name, parent.icon AS parent_icon, "
+            "COALESCE(parent.marker_style, categories.marker_style) AS marker_style "
+            "FROM categories LEFT JOIN categories parent ON parent.id = categories.parent_id "
+            "WHERE NOT EXISTS (SELECT 1 FROM categories child WHERE child.parent_id = categories.id) "
+            "ORDER BY COALESCE(parent.sort_order, categories.sort_order), "
+            "categories.sort_order, categories.id"
         ).fetchall()
     return [dict(row) for row in rows]
 
 
-def _records(kind: str) -> list[dict]:
+def _records(kind: str, archived: bool = False) -> list[dict]:
     with closing(connect_database()) as connection:
         rows = connection.execute(
-            "SELECT places.id, places.kind, places.name, places.description, places.author, "
-            "places.latitude, places.longitude, places.published, places.category_id, "
-            "categories.name AS category_name, categories.color AS category_color, "
+            "SELECT places.id, places.kind, places.name, places.description, places.author, places.link_url, "
+            "places.latitude, places.longitude, places.published, places.category_id, places.archived_at, "
+            "categories.name AS category_name, parent.name AS category_parent_name, "
+            "COALESCE(parent.color, categories.color) AS category_color, "
             "categories.icon AS category_icon, "
+            "COALESCE(parent.marker_style, categories.marker_style) AS category_marker_style, "
             "(SELECT id FROM place_images WHERE place_id = places.id ORDER BY sort_order LIMIT 1) AS cover_image_id "
             "FROM places LEFT JOIN categories ON categories.id = places.category_id "
-            "WHERE places.kind = ? ORDER BY places.id DESC", (kind,)
+            "LEFT JOIN categories parent ON parent.id = categories.parent_id "
+            f"WHERE places.kind = ? AND places.archived_at IS {'NOT ' if archived else ''}NULL "
+            "ORDER BY places.id DESC", (kind,)
         ).fetchall()
     return [dict(row) for row in rows]
 
@@ -136,12 +158,14 @@ def _save_record(kind: str, record: NewRecord, record_id: int | None = None) -> 
         raise HTTPException(status_code=422, detail="Name is required")
     with closing(connect_database()) as connection, connection:
         if record_id is not None and connection.execute(
-            "SELECT 1 FROM places WHERE id = ? AND kind = ?", (record_id, kind)
+            "SELECT 1 FROM places WHERE id = ? AND kind = ? AND archived_at IS NULL", (record_id, kind)
         ).fetchone() is None:
             raise HTTPException(status_code=404, detail="Record not found")
         if kind == "PLACE":
             category = connection.execute(
-                "SELECT id FROM categories WHERE id = ?", (record.category_id,)
+                "SELECT id FROM categories WHERE id = ? AND NOT EXISTS "
+                "(SELECT 1 FROM categories child WHERE child.parent_id = categories.id)",
+                (record.category_id,),
             ).fetchone()
             if category is None:
                 raise HTTPException(status_code=422, detail="Choose an existing category")
@@ -149,30 +173,34 @@ def _save_record(kind: str, record: NewRecord, record_id: int | None = None) -> 
             raise HTTPException(status_code=422, detail="Notes cannot have a category or be published")
         values = (
             record.category_id, name, record.description.strip(), record.author.strip(),
+            str(record.link_url) if record.link_url else None,
             record.latitude, record.longitude, int(record.published),
         )
         if record_id is None:
             cursor = connection.execute(
                 "INSERT INTO places "
-                "(kind, category_id, name, description, author, latitude, longitude, published) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                "(kind, category_id, name, description, author, link_url, latitude, longitude, published) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (kind, *values),
             )
             record_id = cursor.lastrowid
         else:
             connection.execute(
-                "UPDATE places SET category_id = ?, name = ?, description = ?, author = ?, "
+                "UPDATE places SET category_id = ?, name = ?, description = ?, author = ?, link_url = ?, "
                 "latitude = ?, longitude = ?, published = ?, "
                 "updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?",
                 (*values, record_id),
             )
         row = connection.execute(
-            "SELECT places.id, places.kind, places.name, places.description, places.author, "
-            "places.latitude, places.longitude, places.published, places.category_id, "
-            "categories.name AS category_name, categories.color AS category_color, "
+            "SELECT places.id, places.kind, places.name, places.description, places.author, places.link_url, "
+            "places.latitude, places.longitude, places.published, places.category_id, places.archived_at, "
+            "categories.name AS category_name, parent.name AS category_parent_name, "
+            "COALESCE(parent.color, categories.color) AS category_color, "
             "categories.icon AS category_icon, "
+            "COALESCE(parent.marker_style, categories.marker_style) AS category_marker_style, "
             "(SELECT id FROM place_images WHERE place_id = places.id ORDER BY sort_order LIMIT 1) AS cover_image_id "
             "FROM places LEFT JOIN categories ON categories.id = places.category_id "
+            "LEFT JOIN categories parent ON parent.id = categories.parent_id "
             "WHERE places.id = ?", (record_id,)
         ).fetchone()
     return dict(row)
@@ -180,6 +208,13 @@ def _save_record(kind: str, record: NewRecord, record_id: int | None = None) -> 
 
 def _delete_record(kind: str, record_id: int) -> None:
     with closing(connect_database()) as connection, connection:
+        row = connection.execute(
+            "SELECT archived_at FROM places WHERE id = ? AND kind = ?", (record_id, kind)
+        ).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Record not found")
+        if row["archived_at"] is None:
+            raise HTTPException(status_code=409, detail="Archive this record before deleting it permanently")
         filenames = [row["file_path"] for row in connection.execute(
             "SELECT file_path FROM place_images WHERE place_id = ?", (record_id,)
         ).fetchall()]
@@ -191,9 +226,20 @@ def _delete_record(kind: str, record_id: int) -> None:
     remove_record_files(filenames)
 
 
+def _archive_record(kind: str, record_id: int, archived: bool) -> None:
+    with closing(connect_database()) as connection, connection:
+        cursor = connection.execute(
+            "UPDATE places SET archived_at = "
+            "CASE WHEN ? THEN strftime('%Y-%m-%dT%H:%M:%fZ', 'now') ELSE NULL END "
+            "WHERE id = ? AND kind = ?", (int(archived), record_id, kind),
+        )
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Record not found")
+
+
 @admin_router.get("/places")
-def admin_places() -> list[dict]:
-    return _records("PLACE")
+def admin_places(archived: bool = False) -> list[dict]:
+    return _records("PLACE", archived)
 
 
 @admin_router.post("/places", status_code=201)
@@ -206,14 +252,19 @@ def admin_update_place(record_id: int, place: NewRecord) -> dict:
     return _save_record("PLACE", place, record_id)
 
 
-@admin_router.delete("/places/{record_id}", status_code=204)
+@admin_router.patch("/places/{record_id}/archive", status_code=204)
+def admin_archive_place(record_id: int, change: ArchiveInput) -> None:
+    _archive_record("PLACE", record_id, change.archived)
+
+
+@admin_router.delete("/places/{record_id}", status_code=204, dependencies=[Depends(require_superadmin)])
 def admin_delete_place(record_id: int) -> None:
     _delete_record("PLACE", record_id)
 
 
 @admin_router.get("/notes")
-def admin_notes() -> list[dict]:
-    return _records("NOTE")
+def admin_notes(archived: bool = False) -> list[dict]:
+    return _records("NOTE", archived)
 
 
 @admin_router.post("/notes", status_code=201)
@@ -226,15 +277,20 @@ def admin_update_note(record_id: int, note: NewRecord) -> dict:
     return _save_record("NOTE", note, record_id)
 
 
-@admin_router.delete("/notes/{record_id}", status_code=204)
+@admin_router.patch("/notes/{record_id}/archive", status_code=204)
+def admin_archive_note(record_id: int, change: ArchiveInput) -> None:
+    _archive_record("NOTE", record_id, change.archived)
+
+
+@admin_router.delete("/notes/{record_id}", status_code=204, dependencies=[Depends(require_superadmin)])
 def admin_delete_note(record_id: int) -> None:
     _delete_record("NOTE", record_id)
 
 
 @admin_router.get("/session")
-def admin_session(response: Response, username: str = Depends(require_admin)) -> dict[str, object]:
+def admin_session(response: Response, principal: AuthPrincipal = Depends(require_admin)) -> dict[str, object]:
     response.headers["Cache-Control"] = "no-store"
-    return {"authenticated": True, "username": username}
+    return {"authenticated": True, "username": principal.username, "role": principal.role}
 
 
 @admin_router.post("/logout", status_code=204)

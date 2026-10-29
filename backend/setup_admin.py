@@ -1,4 +1,4 @@
-"""Create a private local .env with one Admin account."""
+"""Create a private local .env with the initial Superadmin account."""
 
 import getpass
 import os
@@ -16,11 +16,11 @@ def main() -> None:
     if env_path.exists():
         raise SystemExit(".env already exists; refusing to overwrite it")
 
-    username = input("Admin username [admin]: ").strip() or "admin"
+    username = input("Superadmin username [admin]: ").strip() or "admin"
     if not re.fullmatch(r"[A-Za-z0-9._-]+", username):
         raise SystemExit("Username may contain letters, digits, dot, underscore or hyphen")
 
-    password = getpass.getpass("Admin password (at least 5 characters): ")
+    password = getpass.getpass("Superadmin password (at least 5 characters): ")
     if len(password) < 5:
         raise SystemExit("Password must contain at least 5 characters")
     if getpass.getpass("Confirm password: ") != password:
@@ -40,7 +40,7 @@ def main() -> None:
         raise SystemExit(".env already exists; refusing to overwrite it") from None
     with os.fdopen(descriptor, "w", encoding="utf-8") as file:
         file.write(content)
-    print("Admin configuration saved to ../.env")
+    print("Superadmin configuration saved to ../.env")
 
 
 if __name__ == "__main__":

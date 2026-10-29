@@ -20,10 +20,10 @@ class DatabaseTests(unittest.TestCase):
     def test_migration_is_repeatable_without_erasing_data(self):
         with connect_database(self.path) as connection:
             self.assertEqual(
-                connection.execute("SELECT version FROM schema_version").fetchone()[0], 3
+                connection.execute("SELECT version FROM schema_version").fetchone()[0], len(database.MIGRATIONS)
             )
             self.assertEqual(
-                connection.execute("SELECT COUNT(*) FROM categories").fetchone()[0], 4
+                connection.execute("SELECT COUNT(*) FROM categories").fetchone()[0], 16
             )
             connection.execute(
                 "INSERT INTO places (kind, category_id, name, latitude, longitude) "
@@ -34,7 +34,7 @@ class DatabaseTests(unittest.TestCase):
 
         with connect_database(self.path) as connection:
             self.assertEqual(
-                connection.execute("SELECT COUNT(*) FROM categories").fetchone()[0], 4
+                connection.execute("SELECT COUNT(*) FROM categories").fetchone()[0], 16
             )
             self.assertEqual(
                 connection.execute("SELECT name FROM places").fetchone()[0], "Test place"
@@ -84,7 +84,7 @@ class DatabaseTests(unittest.TestCase):
         initialize_database(old_path)
         with connect_database(old_path) as connection:
             self.assertEqual(
-                connection.execute("SELECT version FROM schema_version").fetchone()[0], 3
+                connection.execute("SELECT version FROM schema_version").fetchone()[0], len(database.MIGRATIONS)
             )
             self.assertEqual(
                 connection.execute("SELECT name FROM places").fetchone()[0], "Saved place"
@@ -114,8 +114,13 @@ class DatabaseTests(unittest.TestCase):
         initialize_database(old_path)
         with connect_database(old_path) as connection:
             self.assertEqual(
-                [row[0] for row in connection.execute("SELECT name FROM categories ORDER BY id")],
-                ["Outdoor activities", "Sea activities", "Gastronomy", "Winery"],
+                [row[0] for row in connection.execute("SELECT name FROM categories WHERE id <= 4 ORDER BY id")],
+                ["Outdoor activities", "Sea activities", "Gastronomy", "Wineries"],
+            )
+            self.assertEqual(
+                connection.execute("SELECT parent.name FROM categories child "
+                                   "JOIN categories parent ON parent.id = child.parent_id "
+                                   "WHERE child.id = 4").fetchone()[0], "What to do"
             )
             self.assertEqual(
                 connection.execute("SELECT category_id FROM places WHERE kind = 'PLACE'").fetchone()[0], 1
@@ -125,6 +130,13 @@ class DatabaseTests(unittest.TestCase):
             )
             self.assertEqual(
                 connection.execute("SELECT category_id FROM share_link_categories").fetchone()[0], 4
+            )
+            self.assertEqual(
+                [tuple(row) for row in connection.execute(
+                    "SELECT name, icon FROM categories WHERE name IN ('Serviced beach', 'Unserviced beach') "
+                    "ORDER BY sort_order"
+                )],
+                [("Serviced beach", "beach"), ("Unserviced beach", "swimming")],
             )
 
 

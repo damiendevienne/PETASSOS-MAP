@@ -43,7 +43,8 @@ def _kind(collection: str) -> str:
 
 def _record(connection, collection: str, record_id: int) -> None:
     if connection.execute(
-        "SELECT 1 FROM places WHERE id = ? AND kind = ?", (record_id, _kind(collection))
+        "SELECT 1 FROM places WHERE id = ? AND kind = ? AND archived_at IS NULL",
+        (record_id, _kind(collection))
     ).fetchone() is None:
         raise HTTPException(status_code=404, detail="Record not found")
 
