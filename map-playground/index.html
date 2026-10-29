@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f5f3ed" />
+    <title>PETASSOS · MapLibre playground</title>
+    <link rel="preconnect" href="https://unpkg.com" />
+    <link rel="preconnect" href="https://tiles.openfreemap.org" />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/maplibre-gl@6.11.2/dist/maplibre-gl.css"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div id="map" aria-label="Map centered on Crete"></div>
+
+    <aside class="style-panel" aria-label="Map style controls">
+      <header class="panel-header">
+        <div>
+          <p class="eyebrow">PETASSOS · MAP STUDY</p>
+          <h1>Style the map</h1>
+        </div>
+        <span class="live-indicator"><i></i> LIVE</span>
+      </header>
+
+      <p class="intro">Changes preview on the map as you make them. Export the finished basemap style when you’re ready.</p>
+
+      <fieldset class="palette-section">
+        <legend>Starting palette</legend>
+        <div class="palette-list">
+          <button class="palette-button active" type="button" data-palette="olive">
+            <span class="palette-dots olive-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+            <span>Olive paper</span>
+          </button>
+          <button class="palette-button" type="button" data-palette="coast">
+            <span class="palette-dots coast-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+            <span>Coastal ink</span>
+          </button>
+          <button class="palette-button" type="button" data-palette="field">
+            <span class="palette-dots field-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+            <span>Field notes</span>
+          </button>
+        </div>
+      </fieldset>
+
+      <fieldset class="colors-section">
+        <legend>Map colors</legend>
+        <div class="color-control">
+          <div class="color-row"><label for="canvas-color">Background</label><input id="canvas-color" data-color="canvas" type="text" value="#f2eddf" maxlength="7" spellcheck="false" /><details class="color-picker"><summary aria-label="Choose background color"><span data-color-chip="canvas"></span></summary><div class="color-popover"><div class="swatch-grid" data-swatches="canvas"></div></div></details></div>
+          <div class="color-row"><label for="land-color">Land &amp; buildings</label><input id="land-color" data-color="land" type="text" value="#e5dec9" maxlength="7" spellcheck="false" /><details class="color-picker"><summary aria-label="Choose land color"><span data-color-chip="land"></span></summary><div class="color-popover"><div class="swatch-grid" data-swatches="land"></div></div></details></div>
+          <div class="color-row"><label for="water-color">Water</label><input id="water-color" data-color="water" type="text" value="#a9cbc8" maxlength="7" spellcheck="false" /><details class="color-picker"><summary aria-label="Choose water color"><span data-color-chip="water"></span></summary><div class="color-popover"><div class="swatch-grid" data-swatches="water"></div></div></details></div>
+          <div class="color-row"><label for="roads-color">Roads</label><input id="roads-color" data-color="roads" type="text" value="#fffaf0" maxlength="7" spellcheck="false" /><details class="color-picker"><summary aria-label="Choose road color"><span data-color-chip="roads"></span></summary><div class="color-popover"><div class="swatch-grid" data-swatches="roads"></div></div></details></div>
+          <div class="color-row"><label for="labels-color">Labels</label><input id="labels-color" data-color="labels" type="text" value="#354840" maxlength="7" spellcheck="false" /><details class="color-picker"><summary aria-label="Choose label color"><span data-color-chip="labels"></span></summary><div class="color-popover"><div class="swatch-grid" data-swatches="labels"></div></div></details></div>
+        </div>
+        <p class="hex-hint">Choose a swatch or enter a hex value.</p>
+      </fieldset>
+
+      <button id="export-style" class="export-button" type="button" disabled>Download style.json</button>
+      <p class="export-note">Saves the current map style as a reusable JSON file.</p>
+      <p id="export-status" class="export-status" aria-live="polite"></p>
+    </aside>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

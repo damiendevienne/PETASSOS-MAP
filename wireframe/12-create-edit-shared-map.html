@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Share map with client · Petassos Administration</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="share-screen">
+  <header class="site-header">
+    <a class="brand" href="00-admin-shell-desktop.html"><img src="../img/petassos-logo.svg" alt="Petassos Travel"></a>
+    <span class="divider"></span>
+    <span class="context">Map administration</span>
+    <div class="header-actions">
+      <span class="share-context">Shared maps</span>
+      <a class="btn quiet" href="11-shared-maps.html">× <span>Close</span></a>
+    </div>
+  </header>
+
+  <main class="share-admin-page">
+    <section class="share-admin-card">
+      <div class="share-page-heading">
+        <div>
+          <p class="overline">ADMINISTRATION <span>／</span> SHARED MAPS</p>
+          <h1>Share map with client</h1>
+          <p>Choose what travellers can see, then share one private link.</p>
+        </div>
+        <span class="step-label">NEW SHARED MAP</span>
+      </div>
+
+      <div class="share-admin-form">
+        <p class="section-kicker">MAP DETAILS</p>
+        <div class="field">
+          <label>Internal name <b>*</b></label>
+          <div class="fieldbox">Client name · trip dates</div>
+          <small class="field-hint">Only visible to your Admin team.</small>
+        </div>
+        <div class="field">
+          <label>Public title <b>*</b></label>
+          <div class="fieldbox">Title travellers will see</div>
+        </div>
+        <div class="field">
+          <label>Zones <b>*</b> <span class="field-aside">2 selected</span></label>
+          <div class="zone-picker">
+            <label><input type="checkbox" checked><span><strong>North coast</strong><small>35.2–35.7° N</small></span></label>
+            <label><input type="checkbox" checked><span><strong>Chania region</strong><small>35.1–35.6° N</small></span></label>
+            <label><input type="checkbox"><span><strong>South coast</strong><small>34.8–35.2° N</small></span></label>
+            <button class="text-action">＋ New zone</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>Allowed categories <b>*</b> <span class="field-aside">5 selected</span></label>
+          <div class="share-category-list">
+            <label><input type="checkbox" checked><i class="dot restaurant"></i>Restaurant</label>
+            <label><input type="checkbox" checked><i class="dot hotel"></i>Hotel</label>
+            <label><input type="checkbox" checked><i class="dot sight"></i>Sightseeing</label>
+            <label><input type="checkbox" checked><i class="dot beach"></i>Beach</label>
+            <label><input type="checkbox" checked><i class="dot cafe"></i>Café</label>
+            <label><input type="checkbox"><i class="dot hike"></i>Hiking</label>
+          </div>
+        </div>
+        <div class="field expiry-field">
+          <label>Valid until <b>*</b></label>
+          <div class="fieldbox">12 June 2026 <span>18:00　▦</span></div>
+        </div>
+      </div>
+
+      <div class="share-admin-map-column">
+        <div class="map-panel-heading">
+          <div><p class="section-kicker">GEOGRAPHIC COVERAGE</p><strong>Selected zones</strong></div>
+          <span class="map-status"><i></i> 2 zones on map</span>
+        </div>
+        <div class="share-map share-map-contained">
+          <span class="share-map-label">MAP PREVIEW · PLACE MARKERS</span>
+          <div class="rect"></div>
+          <i class="marker m1">⌂</i><i class="marker m2">⌖</i><i class="marker m3">☕</i><i class="marker m4">♨</i>
+          <span class="map-note">MapLibre · OpenFreeMap</span>
+        </div>
+        <div class="map-legend"><span><i class="legend-dot"></i>Included zone</span><span><i class="legend-place"></i>PLACE</span><span>Notes are never shared</span></div>
+        <div class="share-explainer">The map shows the union of selected zones. Matching published places will be available through this link.</div>
+      </div>
+
+      <footer class="share-admin-footer">
+        <span class="footer-note">You can edit these settings later. The shared URL will stay the same.</span>
+        <div><a class="btn outline" href="11-shared-maps.html">Cancel</a><button class="btn green">Create shared map</button></div>
+      </footer>
+    </section>
+  </main>
+</body>
+</html>

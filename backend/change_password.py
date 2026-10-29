@@ -1,4 +1,4 @@
-"""Change the local Admin password and invalidate existing sessions."""
+"""Change the local Superadmin password and invalidate existing sessions."""
 
 import getpass
 import os
@@ -22,7 +22,7 @@ def main() -> None:
         raise SystemExit("ADMIN_PASSWORD_HASH is missing from ../.env")
 
     hasher = PasswordHasher(type=Type.ID)
-    current_password = getpass.getpass("Current Admin password: ")
+    current_password = getpass.getpass("Current Superadmin password: ")
     try:
         hasher.verify(password_hash, current_password)
     except (VerificationError, InvalidHashError):
@@ -38,7 +38,7 @@ def main() -> None:
     set_key(env_path, "SESSION_SECRET", secrets.token_urlsafe(32), quote_mode="never")
     set_key(env_path, "ADMIN_PASSWORD_HASH", hasher.hash(new_password), quote_mode="never")
     os.chmod(env_path, 0o600)
-    print("Admin password changed. Restart the backend to apply it.")
+    print("Superadmin password changed. Restart the backend to apply it.")
 
 
 if __name__ == "__main__":

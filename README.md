@@ -2,7 +2,7 @@
 
 Première base de l'application décrite dans la [spécification fonctionnelle](Petassos_Travel_Map_FINAL_Specification_v5.md). Le frontend React est dans `frontend/` et l'API FastAPI dans `backend/`.
 
-L'interface Admin comprend la connexion, la carte de Crète et la gestion des lieux, des notes, de leurs images et des zones rectangulaires. Les fonctions de partage restent à développer.
+L'interface Admin comprend la connexion, la carte de Crète, la gestion des lieux, des notes, de leurs images et des zones rectangulaires, ainsi que le partage de cartes avec les clients.
 
 ## Prérequis
 
@@ -47,9 +47,17 @@ Ouvrir <http://127.0.0.1:5173>. La page de connexion Admin s'affiche. Une fois c
 
 L'API peut aussi être vérifiée sur <http://127.0.0.1:8000/api/health> : elle répond `{"status":"ok"}`.
 
-Le script `setup_admin.py` demande un identifiant et un mot de passe, puis crée `../.env` avec un hash du mot de passe et un secret de session. Ce fichier est ignoré par Git. Il faut le créer avant le premier démarrage du backend. En production HTTPS, régler `SESSION_COOKIE_SECURE=true`.
+Le script `setup_admin.py` demande un identifiant et un mot de passe, puis crée `../.env` avec un hash du mot de passe et un secret de session. Ce compte est **Superadmin** ; le compte existant le devient après la migration. Le fichier `.env` est ignoré par Git. Il faut le créer avant le premier démarrage du backend. En production HTTPS, régler `SESSION_COOKIE_SECURE=true`.
 
-Pour changer le mot de passe Admin, depuis `backend/` :
+Pour créer un compte **Admin**, depuis `backend/` :
+
+```bash
+.venv/bin/python manage_admin.py add alice
+```
+
+Le même script accepte `reset alice` pour changer son mot de passe et `remove alice` pour supprimer le compte. Les Admins peuvent créer, modifier, archiver et restaurer les lieux, notes et zones. Seul le Superadmin peut supprimer définitivement un élément archivé. L'archive se trouve dans le menu Admin, séparément des filtres Published/Draft. Une zone utilisée par une carte partagée doit d'abord être retirée de cette carte avant d'être archivée.
+
+Pour changer le mot de passe Superadmin, depuis `backend/` :
 
 ```bash
 .venv/bin/python change_password.py

@@ -1014,9 +1014,9 @@ It should not require rewriting shared-map visibility logic.
 
 ## 14.1 Shared-map creation
 
-`Share map with client` opens a full-page Admin workflow, not a side panel. Use the same white Admin header, light neutral page background, and centered content surfaces as the other Administration pages. The configuration map sits inside the page in a bounded panel beside the settings; it does not become the full-page background.
+`Share map with client` opens a sharing mode within the existing Admin map. The map stays full-screen and the sharing workspace takes the place of the Places/Notes/Zones panel. A distinct map border and panel colour make the mode clear. The workspace has two tabs: `Create a shared map` and `Shared maps`. Returning to map administration restores its camera, selected tab, filters, visible markers, selection, and panel state.
 
-On desktop, Admin destination pages must fit within the available viewport height, including the header, without requiring document-level vertical scrolling. Content and contained previews should adapt to the available height. This does not change the agreed mobile bottom-sheet interactions within map screens.
+On desktop, the sharing panel fits within the available viewport height and scrolls internally. This does not change the agreed mobile bottom-sheet interactions within map screens.
 
 Required:
 
@@ -1040,7 +1040,7 @@ When zones/categories change:
 
 - selected zone rectangles remain visible;
 - candidate markers inside selected zones remain prominent;
-- markers outside may be de-emphasized;
+- published markers in allowed categories outside selected zones remain visible at lower opacity in this configuration view;
 - changing allowed categories updates candidate markers immediately.
 
 This is the configuration view. Do **not** create a redundant separate `Preview visitor view`.
@@ -1174,7 +1174,7 @@ No routine permanent-delete action is required for shared maps in the first vers
 
 # 17. Shared-map management
 
-Open shared-map management as a dedicated Admin page using the standard white Admin header, light neutral background and centered content surface. The map does not need to remain visible on this page.
+Open shared-map management in the `Shared maps` tab of the sharing workspace. Keep the same Admin map visible; selecting a shared map shows its zones and eligible published places.
 
 Default list shows non-archived shared maps.
 
@@ -1264,19 +1264,21 @@ White/light overlay style consistent with Admin.
 
 Show:
 
-- Petassos identity in the header;
-- required shared-map `public_title` directly below the logo in the header;
+- Petassos identity followed by the traveller baseline on the left of the header;
+- required shared-map `public_title` on the right of the header, with the link's expiry date and time beneath it;
 - geographic search on map;
 - authorised category filters;
 - access to Petassos place list.
 
 No Admin controls.
 
+Zone boundaries and names are not drawn on the traveller map; selected zones still determine which places are available and the initial map framing.
+
 ## 19.2 Authorised category filters
 
-Show only categories allowed by the shared map. The traveller current position is shown with a distinct location dot and accuracy halo when browser location permission is available. A map control requests/centres on the device location; if location is unavailable or denied, do not show a fabricated position.
+Show only categories allowed by the shared map that currently contain at least one authorised place. Put the category switches in a map control below the basemap-style control. The traveller current position is shown with a distinct location dot and accuracy halo when browser location permission is available. A map control requests/centres on the device location; if location is unavailable or denied, do not show a fabricated position.
 
-Initial state: all allowed categories visible.
+Initial state: all listed categories visible.
 
 Traveller may temporarily show/hide these authorised categories.
 

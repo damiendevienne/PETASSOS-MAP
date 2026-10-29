@@ -1,4 +1,4 @@
-"""One Admin account with revocable, signed cookie sessions."""
+"""Superadmin and Admin accounts with revocable, signed cookie sessions."""
 
 import hashlib
 import hmac
@@ -12,6 +12,7 @@ from argon2 import PasswordHasher, extract_parameters
 from argon2.exceptions import InvalidHashError, VerificationError
 from argon2.low_level import Type
 from dotenv import load_dotenv
+from fastapi import HTTPException, Request
 from itsdangerous import BadSignature, URLSafeTimedSerializer
 
 if __package__:
@@ -32,6 +33,12 @@ class AuthSettings:
     password_hash: str = field(repr=False)
     session_secret: str = field(repr=False)
     cookie_secure: bool = True
+
+
+@dataclass(frozen=True)
+class AuthPrincipal:
+    username: str
+    role: str
 
 
 def load_auth_settings() -> AuthSettings:
@@ -74,6 +81,22 @@ def credentials_match(settings: AuthSettings, username: str, password: str) -> b
     ) and password_matches
 
 
+def authenticate(settings: AuthSettings, username: str, password: str) -> AuthPrincipal | None:
+    if credentials_match(settings, username, password):
+        return AuthPrincipal(settings.username, "superadmin")
+    with closing(connect_database()) as connection:
+        row = connection.execute(
+            "SELECT username, password_hash FROM admin_accounts WHERE username = ?", (username,)
+        ).fetchone()
+    if row is None:
+        return None
+    try:
+        PASSWORD_HASHER.verify(row["password_hash"], password)
+    except (VerificationError, InvalidHashError):
+        return None
+    return AuthPrincipal(row["username"], "admin")
+
+
 def _serializer(settings: AuthSettings) -> URLSafeTimedSerializer:
     return URLSafeTimedSerializer(
         settings.session_secret,
@@ -94,32 +117,42 @@ def _unsigned_token(settings: AuthSettings, cookie: str) -> str | None:
     return token if isinstance(token, str) else None
 
 
-def create_session(settings: AuthSettings) -> str:
+def create_session(settings: AuthSettings, principal: AuthPrincipal) -> str:
     """Store a hash of a random session ID and return its signed cookie value."""
     token = secrets.token_urlsafe(32)
     now = int(time.time())
     with closing(connect_database()) as connection, connection:
         connection.execute("DELETE FROM admin_sessions WHERE expires_at <= ?", (now,))
         connection.execute(
-            "INSERT INTO admin_sessions (token_hash, created_at, expires_at) "
-            "VALUES (?, ?, ?)",
-            (_token_hash(token), now, now + SESSION_LIFETIME_SECONDS),
+            "INSERT INTO admin_sessions (token_hash, created_at, expires_at, username, role) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (_token_hash(token), now, now + SESSION_LIFETIME_SECONDS,
+             principal.username, principal.role),
         )
     return _serializer(settings).dumps(token)
 
 
-def session_is_valid(settings: AuthSettings, cookie: str | None) -> bool:
+def session_identity(settings: AuthSettings, cookie: str | None) -> AuthPrincipal | None:
     if not cookie:
-        return False
+        return None
     token = _unsigned_token(settings, cookie)
     if token is None:
-        return False
+        return None
     with closing(connect_database()) as connection:
         row = connection.execute(
-            "SELECT 1 FROM admin_sessions WHERE token_hash = ? AND expires_at > ?",
+            "SELECT username, role FROM admin_sessions WHERE token_hash = ? AND expires_at > ?",
             (_token_hash(token), int(time.time())),
         ).fetchone()
-    return row is not None
+    return AuthPrincipal(row["username"], row["role"]) if row else None
+
+
+def require_superadmin(request: Request) -> AuthPrincipal:
+    principal = session_identity(request.app.state.auth_settings, request.cookies.get(COOKIE_NAME))
+    if principal is None:
+        raise HTTPException(status_code=401, detail="Admin session required")
+    if principal.role != "superadmin":
+        raise HTTPException(status_code=403, detail="Superadmin required")
+    return principal
 
 
 def revoke_session(settings: AuthSettings, cookie: str | None) -> None:

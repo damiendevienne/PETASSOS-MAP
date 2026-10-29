@@ -1,0 +1,77 @@
+.shared-message { min-height: 100dvh; display: grid; align-content: center; justify-items: center; gap: 16px; color: #63748a; }
+.shared-message img { width: 220px; }
+.traveller-page { height: 100dvh; display: flex; flex-direction: column; }
+.traveller-header { display: flex; flex: 0 0 72px; align-items: center; justify-content: space-between; gap: 20px; padding: 0 24px; border-bottom: 1px solid #dbe4eb; background: #fff; box-shadow: 0 2px 12px #213c5410; }
+.traveller-identity { display: flex; align-items: center; gap: 22px; min-width: 0; }
+.traveller-identity img { width: 168px; height: 59px; object-fit: contain; flex: none; }
+.traveller-heading { display: grid; gap: 3px; min-width: 0; margin-left: auto; text-align: right; }
+.traveller-heading strong { font-size: 18px; line-height: 1.2; }
+.traveller-heading small { color: #64748e; font-size: 12px; }
+.traveller-tagline { margin: 0; padding-left: 22px; border-left: 1px solid #d4dfe8; color: #566c83; font-family: Raleway, Arial, Helvetica, sans-serif; font-size: 17px; font-weight: 600; white-space: nowrap; }
+.traveller-main { position: relative; flex: 1; min-height: 0; }
+.traveller-panel { position: absolute; z-index: 3; top: 20px; bottom: 20px; left: 20px; display: flex; flex-direction: column; width: min(360px, calc(100% - 40px)); padding: 18px; overflow: hidden; border: 1px solid #d9e3eb; border-radius: 12px; background: #fff; box-shadow: 0 10px 32px #1a36542b; }
+.traveller-panel-title { display: flex; align-items: center; gap: 9px; }
+.traveller-route-start { display: flex; align-items: center; gap: 5px; min-width: 0; margin-top: 14px; color: #526a80; font-size: 13px; }
+.traveller-route-start strong { overflow: hidden; color: #233b59; text-overflow: ellipsis; white-space: nowrap; }
+.traveller-route-start button { flex: none; margin-left: auto; border: 0; background: transparent; color: #526a80; font-size: 22px; line-height: 1; cursor: pointer; }
+.traveller-route-actions a { display: inline-flex; align-items: center; text-decoration: none; }
+.traveller-route-actions button:disabled { color: #647a8e; cursor: default; }
+.traveller-about-button { display: grid; place-items: center; width: 23px; height: 23px; padding: 0; border: 1.5px solid #6a8299; border-radius: 50%; background: #fff; color: #46627e; font: 700 15px Georgia, serif; cursor: pointer; }
+.traveller-about-button:hover { border-color: #2879d4; color: #2879d4; }
+.traveller-about-button:focus-visible { outline: 2px solid #2879d4; outline-offset: 2px; }
+.about-dialog { width: min(540px, calc(100% - 32px)); max-height: min(80dvh, 700px); padding: 0; overflow: auto; border: 1px solid #d9e2e9; border-radius: 12px; background: #fff; color: #233b59; box-shadow: 0 18px 48px #1b446a33; }
+.about-dialog::backdrop { background: #172c4880; }
+.about-dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 22px; border-bottom: 1px solid #e1e8ef; }
+.about-dialog-heading h2 { margin: 0; font-size: 22px; }
+.about-dialog-heading button { width: 32px; height: 32px; padding: 0; border: 0; background: transparent; color: #647a8e; font-size: 27px; line-height: 1; cursor: pointer; }
+.about-dialog-content { display: grid; gap: 20px; padding: 20px 22px 24px; }
+.about-dialog-content section + section { padding-top: 20px; border-top: 1px solid #e1e8ef; }
+.about-dialog-content h3 { margin: 0 0 8px; font-size: 17px; }
+.about-dialog-content p { margin: 0; color: #405b74; line-height: 1.6; white-space: pre-wrap; }
+.traveller-panel > input { width: 100%; min-height: 38px; margin-top: 17px; padding: 0 10px; border: 1px solid #c8d4df; border-radius: 7px; }
+.traveller-places { flex: 1; min-height: 0; overflow: auto; scrollbar-width: thin; scrollbar-color: #b8c8d5 transparent; }
+.traveller-image-gallery { display: flex; gap: 6px; overflow: auto; }
+.traveller-image-gallery img { width: 90px; height: 65px; object-fit: cover; border-radius: 5px; }
+@media (min-width: 701px) {
+  .sheet-handle { display: none; }
+}
+
+@media (max-width: 700px) {
+  .traveller-page { position: relative; }
+  .traveller-header { position: absolute; z-index: 5; top: 0; right: 0; left: 0; transition: transform .2s ease, opacity .16s ease, visibility .2s; }
+  .traveller-main { position: absolute; inset: 0; width: 100%; height: 100%; flex: none; }
+  .traveller-panel { transition: height .22s ease, transform .22s ease, opacity .16s ease, visibility .2s; }
+  .traveller-main .geo-search,
+  .traveller-main .map-style-picker,
+  .traveller-main .map-visibility-picker,
+  .traveller-main .maplibregl-ctrl-top-right,
+  .traveller-main .maplibregl-ctrl-bottom-right { transition: opacity .16s ease, visibility .16s; }
+  .traveller-immersive .traveller-header,
+  .traveller-immersive .traveller-panel,
+  .traveller-immersive .geo-search,
+  .traveller-immersive .map-style-picker,
+  .traveller-immersive .map-visibility-picker,
+  .traveller-immersive .maplibregl-ctrl-top-right,
+  .traveller-immersive .maplibregl-ctrl-bottom-right { opacity: 0; visibility: hidden; pointer-events: none; }
+  .traveller-immersive .traveller-header { transform: translateY(-100%); }
+  .traveller-immersive .traveller-panel { transform: translateY(100%); }
+  .traveller-header { height: 64px; min-height: 64px; flex-basis: 64px; padding: 0 14px; gap: 10px; }
+  .traveller-identity img { width: 145px; height: 55px; }
+  .traveller-heading { max-width: 46%; }
+  .traveller-heading strong, .traveller-heading small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .traveller-heading strong { font-size: 14px; }
+  .traveller-heading small { font-size: 10px; }
+  .traveller-tagline { display: none; }
+  .traveller-main { --mobile-sheet-height: 74px; }
+  .traveller-main:has(.traveller-panel.work-panel-expanded) { --mobile-sheet-height: min(430px, 68dvh, calc(100dvh - 220px)); }
+  .traveller-panel { top: auto; right: 0; bottom: 0; left: 0; width: 100%; height: var(--mobile-sheet-height); padding: 0 18px; border-radius: 18px 18px 0 0; }
+  .traveller-panel.work-panel-expanded { padding-bottom: 12px; }
+  .traveller-panel .sheet-handle { margin: 0 -18px; width: calc(100% + 36px); }
+  .traveller-panel .work-panel-heading { flex: none; min-height: 46px; }
+  .traveller-panel:not(.work-panel-expanded) > :not(.sheet-handle):not(.work-panel-heading) { display: none; }
+  .traveller-panel:not(.work-panel-expanded) .work-panel-heading-actions { display: none; }
+  .traveller-panel.work-panel-expanded > input { flex: none; margin-top: 8px; }
+  .traveller-panel.work-panel-expanded .current-view-label { flex: none; margin-top: 10px; }
+  .traveller-main .geo-search { top: 76px; left: 12px; width: calc(100% - 104px); }
+  .traveller-main .maplibregl-ctrl-top-right { top: 76px; right: 12px; }
+}

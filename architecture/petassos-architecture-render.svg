@@ -1,0 +1,130 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1100" viewBox="0 0 1800 1100" role="img" aria-labelledby="title desc">
+  <title id="title">Petassos Travel Map — frontend and backend architecture</title>
+  <desc id="desc">Admin and traveller browsers use one React app. The Admin API and shared-map API run in one FastAPI service backed by SQLite and an uploads directory. The browser connects to OpenFreeMap tiles and a geocoding provider.</desc>
+  <defs>
+    <linearGradient id="paper" x2="0" y2="1"><stop stop-color="#fffdf8"/><stop offset="1" stop-color="#f7f4ed"/></linearGradient>
+    <filter id="shadow" x="-10%" y="-20%" width="130%" height="150%"><feDropShadow dx="0" dy="5" stdDeviation="9" flood-color="#17324d" flood-opacity=".10"/></filter>
+    <marker id="arrowBlue" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="strokeWidth"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#377fba" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></marker>
+    <marker id="arrowGreen" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="strokeWidth"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#438e66" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></marker>
+    <marker id="arrowGray" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="strokeWidth"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#8091a0" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></marker>
+    <style>
+      text{font-family:'DejaVu Sans',Arial,sans-serif;fill:#19344e}
+      .title{font-size:44px;font-weight:700;letter-spacing:0px}
+      .subtitle{font-size:21px;fill:#668096}
+      .section{font-size:23px;font-weight:700}
+      .cardtitle{font-size:24px;font-weight:700}
+      .body{font-size:19px;fill:#536a7e}
+      .small{font-size:17px;fill:#688095}
+      .flow{font-size:16px;font-weight:700;fill:#497597}
+      .outer{fill:#fff;stroke-width:2.4;filter:url(#shadow)}
+      .card{fill:#fff;stroke-width:2.2}
+      .link{fill:none;stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round}
+    </style>
+  </defs>
+
+  <rect width="1800" height="1100" fill="#fffdf8"/>
+  <path d="M0 162 C350 145 700 178 1080 155 S1560 152 1800 164" fill="none" stroke="#d9e5e8" stroke-width="2"/>
+  <circle cx="85" cy="91" r="28" fill="none" stroke="#efa82d" stroke-width="5" stroke-dasharray="112 63" transform="rotate(205 85 91)"/>
+  <path d="M37 106 Q63 89 87 105 T137 105" fill="none" stroke="#3285be" stroke-width="5" stroke-linecap="round"/>
+  <text x="167" y="91" class="title">How the Petassos map fits together</text>
+  <text x="168" y="131" class="subtitle">One browser app · one production backend · one place database</text>
+
+  <!-- Section backgrounds -->
+  <rect x="35" y="207" width="270" height="647" rx="26" class="outer" stroke="#e6c785" fill="#fffaf0"/>
+  <rect x="335" y="207" width="540" height="647" rx="26" class="outer" stroke="#9cc9eb" fill="#f5fbff"/>
+  <rect x="915" y="207" width="480" height="647" rx="26" class="outer" stroke="#a4d5b5" fill="#f5fbf7"/>
+  <rect x="1430" y="207" width="335" height="647" rx="26" class="outer" stroke="#e5b4c5" fill="#fff8fa"/>
+  <text x="58" y="251" class="section">People</text>
+  <text x="365" y="251" class="section">Frontend · browser</text>
+  <text x="945" y="251" class="section">Backend · FastAPI</text>
+  <text x="1460" y="251" class="section">Persistent data</text>
+
+  <!-- Connection lines behind cards -->
+  <path d="M280 353 H370" fill="none" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" stroke="#377fba"/>
+  <path d="M280 556 H370" fill="none" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" stroke="#377fba"/>
+  <path d="M840 353 H950" fill="none" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" stroke="#438e66"/>
+  <path d="M840 556 H950" fill="none" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" stroke="#438e66"/>
+  <path d="M1152 615 V680" fill="none" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" stroke="#438e66"/>
+  <path d="M1355 353 H1465" fill="none" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" stroke="#438e66"/>
+  <path d="M1355 389 H1410 V608 H1465" fill="none" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" stroke="#438e66"/>
+  <path d="M1355 738 H1420 V447 H1465" fill="none" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" stroke="#438e66"/>
+  <path d="M476 410 V690" fill="none" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" stroke="#377fba"/>
+  <path d="M521 615 V690" fill="none" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" stroke="#377fba"/>
+  <path d="M705 410 V690" fill="none" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" stroke="#377fba"/>
+  <path d="M752 615 V690" fill="none" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" stroke="#377fba"/>
+  <path d="M485 813 V926" fill="none" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" stroke="#8091a0"/>
+  <path d="M726 813 V926" fill="none" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" stroke="#8091a0"/>
+
+  <!-- People -->
+  <rect x="60" y="300" width="220" height="107" rx="18" class="card" stroke="#ddbd78"/>
+  <circle cx="91" cy="341" r="12" fill="#f7db9f" stroke="#b98a37" stroke-width="2"/>
+  <path d="M72 371 Q91 348 110 371" fill="none" stroke="#b98a37" stroke-width="3"/>
+  <text x="120" y="344" class="cardtitle">Admin</text>
+  <text x="120" y="374" class="small">signs in</text>
+  <rect x="60" y="503" width="220" height="107" rx="18" class="card" stroke="#ddbd78"/>
+  <circle cx="91" cy="544" r="12" fill="#f7db9f" stroke="#b98a37" stroke-width="2"/>
+  <path d="M72 574 Q91 551 110 574" fill="none" stroke="#b98a37" stroke-width="3"/>
+  <text x="120" y="547" class="cardtitle">Traveller</text>
+  <text x="120" y="577" class="small">shared URL</text>
+
+  <!-- Browser -->
+  <rect x="370" y="295" width="470" height="115" rx="17" class="card" stroke="#73aed9"/>
+  <rect x="370" y="295" width="9" height="115" rx="4" fill="#3e92ca"/>
+  <text x="400" y="339" class="cardtitle">React Admin interface</text>
+  <text x="400" y="374" class="body">Places · notes · zones · sharing · CSV</text>
+  <rect x="370" y="498" width="470" height="117" rx="17" class="card" stroke="#73aed9"/>
+  <rect x="370" y="498" width="9" height="117" rx="4" fill="#3e92ca"/>
+  <text x="400" y="542" class="cardtitle">React traveller interface</text>
+  <text x="400" y="578" class="body">Map · list · place details</text>
+  <rect x="370" y="690" width="225" height="123" rx="17" class="card" stroke="#73aed9"/>
+  <text x="394" y="735" class="cardtitle">MapLibre</text>
+  <text x="394" y="767" class="body">Shared map</text>
+  <text x="394" y="793" class="small">markers + selection</text>
+  <rect x="610" y="690" width="230" height="123" rx="17" class="card" stroke="#73aed9"/>
+  <text x="634" y="735" class="cardtitle">Geo search</text>
+  <text x="634" y="767" class="body">Provider adapter</text>
+  <text x="634" y="793" class="small">submit a location</text>
+
+  <!-- Backend -->
+  <rect x="950" y="295" width="405" height="115" rx="17" class="card" stroke="#84bd99"/>
+  <rect x="950" y="295" width="9" height="115" rx="4" fill="#55a473"/>
+  <text x="980" y="339" class="cardtitle">Admin API</text>
+  <text x="980" y="374" class="body">Session check · edit · import</text>
+  <rect x="950" y="498" width="405" height="117" rx="17" class="card" stroke="#84bd99"/>
+  <rect x="950" y="498" width="9" height="117" rx="4" fill="#55a473"/>
+  <text x="980" y="542" class="cardtitle">Shared-map API</text>
+  <text x="980" y="578" class="body">Validates URL token</text>
+  <rect x="950" y="680" width="405" height="116" rx="17" class="card" stroke="#84bd99"/>
+  <text x="980" y="724" class="cardtitle">Visibility rules</text>
+  <text x="980" y="757" class="body">Published + zones + categories</text>
+  <text x="950" y="834" class="small">Also serves React files and uploaded images</text>
+
+  <!-- Storage -->
+  <rect x="1465" y="313" width="265" height="139" rx="17" class="card" stroke="#dba0b2"/>
+  <text x="1492" y="357" class="cardtitle">SQLite</text>
+  <text x="1492" y="391" class="body">Places · notes</text>
+  <text x="1492" y="420" class="body">zones · shared links</text>
+  <rect x="1465" y="556" width="265" height="112" rx="17" class="card" stroke="#dba0b2"/>
+  <text x="1492" y="600" class="cardtitle">Uploads</text>
+  <text x="1492" y="634" class="body">Place / note images</text>
+
+  <!-- Connection labels -->
+  <rect x="850" y="310" width="91" height="31" rx="15" fill="#eff8f2"/>
+  <text x="858" y="331" class="flow">session</text>
+  <rect x="853" y="514" width="84" height="31" rx="15" fill="#eff8f2"/>
+  <text x="863" y="535" class="flow">token</text>
+
+  <!-- Direct browser integrations -->
+  <text x="55" y="924" class="section">External services</text>
+  <text x="56" y="956" class="small">called from the browser</text>
+  <rect x="370" y="926" width="225" height="112" rx="17" fill="#fff" stroke="#bdc9d3" stroke-width="2.2" filter="url(#shadow)"/>
+  <text x="394" y="971" class="cardtitle">OpenFreeMap</text>
+  <text x="394" y="1005" class="body">Bright map tiles</text>
+  <rect x="610" y="926" width="230" height="112" rx="17" fill="#fff" stroke="#bdc9d3" stroke-width="2.2" filter="url(#shadow)"/>
+  <text x="634" y="971" class="cardtitle">Geocoding</text>
+  <text x="634" y="1005" class="body">Nominatim initially</text>
+
+  <rect x="930" y="926" width="800" height="112" rx="18" fill="#edf6ef" stroke="#b6d8bf" stroke-width="2"/>
+  <text x="958" y="970" class="cardtitle">The key privacy boundary</text>
+  <text x="958" y="1007" class="body">FastAPI filters traveller data before the browser receives it.</text>
+</svg>
