@@ -133,6 +133,7 @@
 
 @media (min-width: 701px) and (max-width: 1499px) {
   .traveller-place-detail-panel { z-index: 4; top: 20px; bottom: 20px; left: 20px; width: min(360px, calc(100% - 40px)); border-radius: 12px; }
+  .traveller-place-detail-scroll { padding-left: 22px; }
   .traveller-place-selected .traveller-map-category-buttons { left: 382px; }
 }
 
