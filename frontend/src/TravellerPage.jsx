@@ -9,7 +9,7 @@ import TravellerPlaceDetail from './TravellerPlaceDetail.jsx';
 import TravellerCategoryPanel from './TravellerCategoryPanel.jsx';
 import { api } from './api.js';
 import { distanceInKm } from './geoDistance.js';
-import { ClientI18nProvider, localizePlace, useClientI18n } from './i18n/clientI18n.jsx';
+import { ClientI18nProvider, localizePlace, localizeZone, useClientI18n } from './i18n/clientI18n.jsx';
 import { containsPoint } from './mapData.js';
 
 const noop = () => {};
@@ -74,7 +74,8 @@ function TravellerPageContent({ token }) {
   }, [token]);
 
   const clientPlaces = useMemo(() => (data?.places || []).map((place) => localizePlace(place, language)), [data, language]);
-  const selectedZone = useMemo(() => (data?.zones || []).find((zone) => zone.id === selectedZoneId) ?? null, [data, selectedZoneId]);
+  const clientZones = useMemo(() => (data?.zones || []).map((zone) => localizeZone(zone, language)), [data, language]);
+  const selectedZone = useMemo(() => clientZones.find((zone) => zone.id === selectedZoneId) ?? null, [clientZones, selectedZoneId]);
   const zonePlaces = useMemo(() => {
     if (!selectedZone) return clientPlaces;
     return clientPlaces.filter((place) => containsPoint(selectedZone, { lat: place.latitude, lng: place.longitude }));
@@ -87,7 +88,7 @@ function TravellerPageContent({ token }) {
   const visiblePlaces = useMemo(() => zonePlaces.filter((place) => !hiddenCategoryIds.includes(place.category_id)), [zonePlaces, hiddenCategoryIds]);
   const routeStart = clientPlaces.find((place) => place.id === routeStartId);
   const selectedPlace = clientPlaces.find((place) => place.id === selected?.id) ?? null;
-  const aboutZones = useMemo(() => (data?.zones || []).filter((zone) => zone.about_title && zone.about_text), [data]);
+  const aboutZones = useMemo(() => clientZones.filter((zone) => zone.about_title && zone.about_text), [clientZones]);
   const activeAboutZone = useMemo(() => aboutZones.reduce((closest, zone) => {
     if (!closest) return zone;
     return distanceBetweenViewAndZone(viewport, zone) < distanceBetweenViewAndZone(viewport, closest) ? zone : closest;

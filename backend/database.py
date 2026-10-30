@@ -8,6 +8,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATABASE_NAME = "app.db"
 SUPPORTED_PLACE_LANGUAGES = ("en", "fr", "de", "it")
+SUPPORTED_ZONE_LANGUAGES = SUPPORTED_PLACE_LANGUAGES
 
 
 def place_translations(connection: sqlite3.Connection, place_id: int) -> dict[str, dict[str, str]]:
@@ -20,6 +21,20 @@ def place_translations(connection: sqlite3.Connection, place_id: int) -> dict[st
             "name": row["name"] or "",
             "description": row["description"] or "",
             "practical_info": row["practical_info"] or "",
+        }
+        for row in rows
+    }
+
+
+def zone_translations(connection: sqlite3.Connection, zone_id: int) -> dict[str, dict[str, str]]:
+    rows = connection.execute(
+        "SELECT language, about_title, about_text FROM zone_translations WHERE zone_id = ?",
+        (zone_id,),
+    ).fetchall()
+    return {
+        row["language"]: {
+            "about_title": row["about_title"] or "",
+            "about_text": row["about_text"] or "",
         }
         for row in rows
     }
@@ -434,7 +449,28 @@ def _migration_22(connection: sqlite3.Connection) -> None:
     )
 
 
-MIGRATIONS = (_migration_1, _migration_2, _migration_3, _migration_4, _migration_5, _migration_6, _migration_7, _migration_8, _migration_9, _migration_10, _migration_11, _migration_12, _migration_13, _migration_14, _migration_15, _migration_16, _migration_17, _migration_18, _migration_19, _migration_20, _migration_21, _migration_22)
+def _migration_23(connection: sqlite3.Connection) -> None:
+    """Store localized zone names and About text independently from legacy columns."""
+    connection.execute(
+        """
+        CREATE TABLE zone_translations (
+            zone_id INTEGER NOT NULL REFERENCES zones(id) ON DELETE CASCADE,
+            language TEXT NOT NULL CHECK (language IN ('en', 'fr', 'de', 'it')),
+            name TEXT NOT NULL DEFAULT '',
+            about_title TEXT NOT NULL DEFAULT '',
+            about_text TEXT NOT NULL DEFAULT '',
+            PRIMARY KEY (zone_id, language)
+        )
+        """
+    )
+    connection.execute(
+        """
+        INSERT INTO zone_translations (zone_id, language, name, about_title, about_text)
+        SELECT id, 'en', name, COALESCE(about_title, ''), COALESCE(about_text, '')
+        FROM zones
+        """
+    )
+MIGRATIONS = (_migration_1, _migration_2, _migration_3, _migration_4, _migration_5, _migration_6, _migration_7, _migration_8, _migration_9, _migration_10, _migration_11, _migration_12, _migration_13, _migration_14, _migration_15, _migration_16, _migration_17, _migration_18, _migration_19, _migration_20, _migration_21, _migration_22, _migration_23)
 
 
 def initialize_database(path: Path | None = None) -> Path:

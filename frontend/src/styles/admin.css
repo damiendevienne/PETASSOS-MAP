@@ -154,6 +154,7 @@
 .mobile-tab-arrow { display: none; }
 .work-panel-content { flex: 1; min-height: 0; overflow: auto; padding: 24px; }
 .work-panel-heading { display: flex; align-items: center; justify-content: space-between; }
+.work-panel-heading.zone-edit-heading { display: block; }
 .work-panel-heading h1 { margin: 0; font-size: 25px; line-height: 1.2; }
 .work-panel-heading-actions { display: flex; align-items: center; gap: 10px; }
 .item-count {
@@ -251,6 +252,10 @@
 .localized-form-field { display: grid; gap: 0; }
 .localized-form-field .place-form-language-tabs { margin: 0; }
 .localized-form-field input, .localized-form-field textarea { margin-bottom: 0; border-radius: 0 0 8px 8px; }
+.place-form .localized-form-field input.zone-name-locked,
+.place-form .localized-form-field input.zone-name-locked:disabled { background: #edf1f4; border-color: #c3cdd5; color: #8091a0; cursor: not-allowed; opacity: 1; }
+.zone-locked-banner { display: flex; align-items: center; gap: 5px; margin: 4px 0 0; color: #8f7b80; font-size: 11px; font-weight: 600; line-height: 1.35; }
+.zone-locked-banner svg { width: 13px; height: 13px; flex: 0 0 auto; }
 .place-form.note-form { padding: 12px; border-radius: 9px; background: #fffaf0; }
 .place-form-position { margin: 0 0 10px; color: #647a8e; font-size: 12px; }
 .note-hint { margin: 0 0 8px; color: #80571a; font-size: 13px; font-weight: 700; }

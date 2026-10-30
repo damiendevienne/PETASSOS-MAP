@@ -13,6 +13,20 @@ import CsvImportDialog from './CsvImportDialog.jsx';
 import { api } from './api.js';
 import { ADMIN_COLLECTIONS, COLLECTIONS, MODE_CONFIG, MODES, RECORD_KINDS, collectionForKind, modeForKind } from './constants.js';
 
+const ZONE_LANGUAGES = ['en', 'fr', 'de', 'it'];
+
+function newZoneTranslations() {
+  return Object.fromEntries(ZONE_LANGUAGES.map((language) => [language, { about_title: '', about_text: '' }]));
+}
+
+function zoneHasName(zone) {
+  return Boolean(zone?.name?.trim());
+}
+
+function zoneHasAboutMismatch(zone) {
+  return ZONE_LANGUAGES.some((language) => Boolean(zone?.translations?.[language]?.about_title?.trim()) !== Boolean(zone?.translations?.[language]?.about_text?.trim()));
+}
+
 function useAdminSession(publicRoute = false) {
   const [session, setSession] = useState({ state: 'checking', username: '', role: '' });
 
@@ -52,7 +66,7 @@ async function loadAdminCollection(collection, signal) {
 }
 
 
-function WorkPanel({ mode, categories, places, searchPlaces, notes, zones, selectedZoneId, zoneDraft, zoneDrawing, editingZone, zoneError, viewport, loadError, picking, draftKind, draftLocation, editingRecord, editorError, selectedRecord, publicationFilter, onPublicationFilterChange, onShowAll, onSearchSelect, onModeChange, onStartPick, onCancelDraft, onPreviewCategory, onDirtyChange, onSaveRecord, onArchiveRecord, onSelectRecord, onEditRecord, onStartZone, onSelectZone, onEditZone, onFocusZone, onArchiveZone, onSaveZone, onCancelZone, onZoneNameChange, onZoneAboutTitleChange, onZoneAboutTextChange, onZoneLockChange, onRedrawZone, archiveOpen, archiveItems, archiveError, role, onRestoreArchived, onDeleteArchived, onCloseArchive }) {
+function WorkPanel({ mode, categories, places, searchPlaces, notes, zones, selectedZoneId, zoneDraft, zoneDrawing, editingZone, zoneError, viewport, loadError, picking, draftKind, draftLocation, editingRecord, editorError, selectedRecord, publicationFilter, onPublicationFilterChange, onShowAll, onSearchSelect, onModeChange, onStartPick, onCancelDraft, onPreviewCategory, onDirtyChange, onSaveRecord, onArchiveRecord, onSelectRecord, onEditRecord, onStartZone, onSelectZone, onEditZone, onFocusZone, onArchiveZone, onSaveZone, onCancelZone, onZoneNameChange, onZoneAboutTitleChange, onZoneAboutTextChange, onZoneTranslationChange, onZoneLockChange, onRedrawZone, archiveOpen, archiveItems, archiveError, role, onRestoreArchived, onDeleteArchived, onCloseArchive }) {
   const [expanded, setExpanded] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const selectedCardRef = useRef(null);
@@ -113,6 +127,7 @@ function WorkPanel({ mode, categories, places, searchPlaces, notes, zones, selec
           onNameChange={onZoneNameChange}
           onAboutTitleChange={onZoneAboutTitleChange}
           onAboutTextChange={onZoneAboutTextChange}
+          onTranslationChange={onZoneTranslationChange}
           onLockChange={onZoneLockChange}
           onSelect={onSelectZone}
           onEdit={onEditZone}
@@ -268,8 +283,8 @@ function AdminPage({ onLogout, logoutError, role }) {
   const picking = Boolean(draftKind && !draftLocation);
   const activeKind = editingRecord?.kind ?? draftKind ?? (zoneDraft ? 'ZONE' : null);
   const zoneDirty = Boolean(zoneDraft && (editingZone
-    ? zoneDraft.name !== editingZone.name || zoneDraft.about_title !== editingZone.about_title || zoneDraft.about_text !== editingZone.about_text || Boolean(zoneDraft.locked) !== Boolean(editingZone.locked) || ['min_lat', 'max_lat', 'min_lon', 'max_lon'].some((key) => zoneDraft[key] !== editingZone[key])
-    : zoneDraft.name.trim() || zoneDraft.about_title.trim() || zoneDraft.about_text.trim() || zoneDraft.locked || zoneDraft.min_lat !== null));
+    ? JSON.stringify(zoneDraft.translations) !== JSON.stringify(editingZone.translations) || Boolean(zoneDraft.locked) !== Boolean(editingZone.locked) || ['min_lat', 'max_lat', 'min_lon', 'max_lon'].some((key) => zoneDraft[key] !== editingZone[key])
+    : zoneHasName(zoneDraft) || Object.values(zoneDraft.translations || {}).some((values) => values.about_title.trim() || values.about_text.trim()) || zoneDraft.locked || zoneDraft.min_lat !== null));
   const activeDirty = zoneDraft ? zoneDirty : editingDirty;
   const visiblePlaces = useMemo(
     () => places.filter((place) => !hiddenCategoryIds.includes(place.category_id) && (
@@ -560,7 +575,7 @@ function AdminPage({ onLogout, logoutError, role }) {
       clearDraft();
       setSelectedRecord(null);
       setSelectedZoneId(null);
-      setZoneDraft({ name: '', about_title: '', about_text: '', locked: false, min_lat: null, max_lat: null, min_lon: null, max_lon: null });
+      setZoneDraft({ name: '', about_title: '', about_text: '', translations: newZoneTranslations(), locked: false, min_lat: null, max_lat: null, min_lon: null, max_lon: null });
     });
   }
 
@@ -583,7 +598,7 @@ function AdminPage({ onLogout, logoutError, role }) {
       setSelectedRecord(null);
       setSelectedZoneId(zone.id);
       setEditingZone(zone);
-      setZoneDraft({ ...zone });
+      setZoneDraft({ ...zone, translations: zone.translations || newZoneTranslations() });
       focusZone(zone);
     });
   }
@@ -595,6 +610,7 @@ function AdminPage({ onLogout, logoutError, role }) {
       name: zoneDraft.name,
       about_title: zoneDraft.about_title,
       about_text: zoneDraft.about_text,
+      translations: zoneDraft.translations,
       locked: Boolean(zoneDraft.locked),
       min_lat: zoneDraft.min_lat, max_lat: zoneDraft.max_lat,
       min_lon: zoneDraft.min_lon, max_lon: zoneDraft.max_lon,
@@ -621,7 +637,7 @@ function AdminPage({ onLogout, logoutError, role }) {
   }
 
   function saveZone() {
-    if (!zoneDraft?.name.trim() || zoneDraft.min_lat === null || zoneDrawing || Boolean(zoneDraft.about_title?.trim()) !== Boolean(zoneDraft.about_text?.trim())) return;
+    if (!zoneDraft || !zoneHasName(zoneDraft) || zoneDraft.min_lat === null || zoneDrawing || zoneHasAboutMismatch(zoneDraft)) return;
     const geometryChanged = editingZone && ['min_lat', 'max_lat', 'min_lon', 'max_lon'].some((key) => zoneDraft[key] !== editingZone[key]);
     if (geometryChanged && editingZone.used_by_count > 0) {
       discardActionRef.current = persistZone;
@@ -777,6 +793,7 @@ function AdminPage({ onLogout, logoutError, role }) {
           onZoneNameChange={(name) => setZoneDraft((current) => ({ ...current, name }))}
           onZoneAboutTitleChange={(about_title) => setZoneDraft((current) => ({ ...current, about_title }))}
           onZoneAboutTextChange={(about_text) => setZoneDraft((current) => ({ ...current, about_text }))}
+          onZoneTranslationChange={(field, language, value) => setZoneDraft((current) => ({ ...current, ...(language === 'en' ? { [field === 'name' ? 'name' : field]: value } : {}), translations: { ...(current.translations || newZoneTranslations()), [language]: { ...(current.translations?.[language] || {}), [field]: value } } }))}
           onZoneLockChange={(locked) => setZoneDraft((current) => ({ ...current, locked }))}
           onRedrawZone={() => setZoneDraft((current) => ({ ...current, min_lat: null, max_lat: null, min_lon: null, max_lon: null }))}
           archiveOpen={archiveOpen}

@@ -1,38 +1,57 @@
 import { useState } from 'react';
 
+const ZONE_LANGUAGES = ['en', 'fr', 'de', 'it'];
+
+function localizedValue(draft, language, field) {
+  return draft.translations?.[language]?.[field] ?? (language === 'en' ? draft[field] ?? '' : '');
+}
+
+function LanguageTabs({ language, onChange, translations, field }) {
+  return <div className="place-form-language-tabs" role="tablist" aria-label={`${field} language`}>
+    {ZONE_LANGUAGES.map((item) => <button key={item} className={item === language ? 'active' : ''} type="button" role="tab" aria-selected={item === language} onClick={() => onChange(item)}>
+      {item.toUpperCase()}<span className={`place-form-language-status${translations[item]?.[field]?.trim() ? ' filled' : ''}`} aria-hidden="true" />
+    </button>)}
+  </div>;
+}
+
 export function LockIcon() {
   return <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="7" width="10" height="7" rx="1.5" /><path d="M5 7V5a3 3 0 0 1 6 0v2" /></svg>;
 }
 
-export default function ZonePanel({ zones, selectedId, draft, drawing, editing, error, role, onNameChange, onAboutTitleChange, onAboutTextChange, onLockChange, onSelect, onEdit, onFocus, onArchive, onSave, onCancel, onRedraw }) {
+export default function ZonePanel({ zones, selectedId, draft, drawing, editing, error, role, onNameChange, onAboutTitleChange, onAboutTextChange, onTranslationChange, onLockChange, onSelect, onEdit, onFocus, onArchive, onSave, onCancel, onRedraw }) {
   const [searchQuery, setSearchQuery] = useState('');
+  const [language, setLanguage] = useState('en');
   const query = searchQuery.trim().toLocaleLowerCase();
   const filteredZones = query ? zones.filter((zone) => zone.name.toLocaleLowerCase().includes(query)) : zones;
 
   if (draft) {
     const hasRectangle = draft.min_lat !== null && !drawing;
     const boundsLocked = Boolean(editing?.locked && role !== 'superadmin');
+    const translations = draft.translations || { en: { name: draft.name || '', about_title: draft.about_title || '', about_text: draft.about_text || '' } };
+    const hasAboutMismatch = ZONE_LANGUAGES.some((item) => Boolean(translations[item]?.about_title?.trim()) !== Boolean(translations[item]?.about_text?.trim()));
+    const updateTranslation = (field, value) => onTranslationChange?.(field, language, value);
     return <>
-      <div className="work-panel-heading"><h1>{editing ? 'Edit zone' : 'New zone'}</h1></div>
+      <div className={`work-panel-heading${boundsLocked ? ' zone-edit-heading' : ''}`}><h1>{editing ? 'Edit zone' : 'New zone'}</h1>{boundsLocked && <p className="zone-locked-banner"><LockIcon /> This zone is locked. Only a superadmin can change its name or boundaries.</p>}</div>
       <form className="place-form zone-form" onSubmit={(event) => { event.preventDefault(); onSave(); }}>
-        <label htmlFor="zone-name">Name *</label>
-        <input id="zone-name" value={draft.name} onChange={(event) => onNameChange(event.target.value)} required autoFocus disabled={boundsLocked} />
+        <div className="localized-form-field"><label htmlFor="zone-name">Name *</label>
+        <input className={boundsLocked ? 'zone-name-locked' : ''} id="zone-name" value={draft.name ?? ''} onChange={(event) => onNameChange(event.target.value)} required autoFocus disabled={boundsLocked} />
+        </div>
         <fieldset className="zone-about-box">
           <legend>About <span className="optional-label">(optional)</span></legend>
-          <p>When this zone is shared, its title and text appear in the client’s About window. Fill in both or leave both empty.</p>
-          <label htmlFor="zone-about-title">Title {draft.about_text?.trim() ? '*' : <span className="optional-label">(optional)</span>}</label>
-          <input id="zone-about-title" value={draft.about_title ?? ''} onChange={(event) => onAboutTitleChange(event.target.value)} required={Boolean(draft.about_text?.trim())} />
-          <label htmlFor="zone-about-text">Text {draft.about_title?.trim() ? '*' : <span className="optional-label">(optional)</span>}</label>
-          <textarea id="zone-about-text" rows="5" value={draft.about_text ?? ''} onChange={(event) => onAboutTextChange(event.target.value)} required={Boolean(draft.about_title?.trim())} />
+          <p>When this zone is shared, its title and text appear in the client’s History window. Fill in both or leave both empty.</p>
+          <div className="localized-form-field"><label htmlFor="zone-about-title">Title <span className="optional-label">(optional)</span></label><LanguageTabs language={language} onChange={setLanguage} translations={translations} field="about_title" />
+          <input id="zone-about-title" value={localizedValue(draft, language, 'about_title')} onChange={(event) => updateTranslation('about_title', event.target.value)} /></div>
+          <div className="localized-form-field"><label htmlFor="zone-about-text">Text <span className="optional-label">(optional)</span></label><LanguageTabs language={language} onChange={setLanguage} translations={translations} field="about_text" />
+          <textarea id="zone-about-text" rows="5" value={localizedValue(draft, language, 'about_text')} onChange={(event) => updateTranslation('about_text', event.target.value)} /></div>
         </fieldset>
         {role === 'superadmin' && <label className="zone-lock-control"><span>Lock boundaries</span><input type="checkbox" role="switch" checked={Boolean(draft.locked)} onChange={(event) => onLockChange(event.target.checked)} /><span className="map-visibility-switch" aria-hidden="true" /></label>}
-        <p className="zone-instruction">{boundsLocked ? 'This zone is locked. Only a superadmin can change its name or boundaries.' : drawing ? 'Click the opposite corner to finish the rectangle.' : hasRectangle ? 'Drag the map handles to move or resize this zone.' : 'Click two opposite corners on the map to draw the rectangle.'}</p>
+        <p className="zone-instruction">{drawing ? 'Click the opposite corner to finish the rectangle.' : hasRectangle ? 'Drag the map handles to move or resize this zone.' : 'Click two opposite corners on the map to draw the rectangle.'}</p>
         {hasRectangle && !boundsLocked && <button className="zone-redraw" type="button" onClick={onRedraw}>Draw again</button>}
         {editing?.used_by_count > 0 && <p className="zone-usage">Used by {editing.used_by_count} shared map{editing.used_by_count === 1 ? '' : 's'}.</p>}
         {error && <p className="form-error" role="alert">{error}</p>}
         <div className="place-form-actions">
           <button type="button" onClick={onCancel}>Cancel</button>
-          <button className="primary-button" type="submit" disabled={!draft.name.trim() || !hasRectangle || Boolean(draft.about_title?.trim()) !== Boolean(draft.about_text?.trim())}>Save zone</button>
+          <button className="primary-button" type="submit" disabled={!draft.name?.trim() || !hasRectangle || hasAboutMismatch}>Save zone</button>
         </div>
         {editing && <>
           <button className="archive-record-button" type="button" onClick={() => onArchive(editing)} disabled={!editing.can_archive}>Archive zone</button>

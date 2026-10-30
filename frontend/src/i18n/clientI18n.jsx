@@ -36,6 +36,20 @@ export function localizePlace(place, language) {
   };
 }
 
+export function localizeZone(zone, language) {
+  const translations = zone?.translations || {};
+  const candidates = [language, 'en', ...PLACE_LANGUAGES].filter((item, index, list) => list.indexOf(item) === index);
+  const choose = (field, legacyValue = '') => candidates
+    .map((item) => translations[item]?.[field]?.trim())
+    .find(Boolean) || legacyValue || '';
+  return {
+    ...zone,
+    name: zone?.name || '',
+    about_title: choose('about_title', zone?.about_title),
+    about_text: choose('about_text', zone?.about_text),
+  };
+}
+
 export function ClientI18nProvider({ children }) {
   const [language, setLanguageState] = useState(readLanguage);
   const setLanguage = (nextLanguage) => {

@@ -9,10 +9,10 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 if __package__:
-    from .database import connect_database, place_translations
+    from .database import connect_database, place_translations, zone_translations
     from .images import upload_dir
 else:
-    from database import connect_database, place_translations
+    from database import connect_database, place_translations, zone_translations
     from images import upload_dir
 
 
@@ -201,11 +201,16 @@ def public_shared_map(token: str) -> dict:
                 )
             ]
             public_places.append(place)
+        public_zones = []
+        for row in zones:
+            zone = dict(row)
+            zone["translations"] = zone_translations(connection, zone["id"])
+            public_zones.append(zone)
         return {
             "public_title": link["public_title"],
             "expires_at": link["expires_at"],
             "categories": [dict(row) for row in categories],
-            "zones": [dict(row) for row in zones],
+            "zones": public_zones,
             "places": public_places,
         }
 
