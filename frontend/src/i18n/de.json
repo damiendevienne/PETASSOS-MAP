@@ -1,0 +1,15 @@
+{
+  "language": "Sprache",
+  "panel": { "collapse": "Panel einklappen", "expand": "Panel ausklappen" },
+  "map": { "interactiveMap": "Interaktive Karte", "searchLocation": "Geografischen Ort suchen", "cityOrAddress": "Stadt oder Adresse", "searchPlaceholder": "Stadt oder Adresse suchen", "search": "Suchen", "searching": "Suche…", "noLocation": "Kein Ort gefunden.", "showOnMap": "Auf der Karte anzeigen", "selectAll": "Alle auswählen", "deselectAll": "Alle abwählen", "markerVisibility": "Markersichtbarkeit", "mapLayers": "Kartenebenen", "notes": "Notizen" },
+  "languages": { "en": "English", "fr": "Français", "de": "Deutsch" },
+  "header": { "tagline": "Orte, die es wert sind, entdeckt zu werden – für SIE ausgewählt!", "until": "Bis" },
+  "history": { "zone": "Gebiet", "learnMore": "Mehr erfahren", "open": "Geschichte öffnen", "close": "Geschichte schließen", "title": "Geschichte", "switchZone": "Zum nächsten Gebiet" },
+  "places": { "title": "Orte", "showAll": "Alle Orte anzeigen", "search": "Orte suchen", "currentView": "ORTE IN DER AKTUELLEN ANSICHT", "searchResults": "SUCHERGEBNISSE ({count})", "routeFrom": "Route ab", "clearRoute": "Startpunkt entfernen" },
+  "category": { "category": "Kategorie", "center": "Kategorie zentrieren und vergrößern", "close": "Kategorieorte schließen", "search": "In dieser Kategorie suchen", "closeSearch": "Suche schließen", "searchPlaceholder": "In dieser Kategorie suchen", "place": "Ort", "places": "Orte" },
+  "detail": { "details": "Details zu {name}", "back": "Zurück zu den Orten der Kategorie", "center": "Ort zentrieren und vergrößern", "close": "Zurück zu den Orten", "previousPicture": "Vorheriges Bild", "nextPicture": "Nächstes Bild", "visitWebsite": "Website besuchen", "goThere": "Route", "opensIn": "Öffnet in {app}", "startingPoint": "Startpunkt", "setStartPoint": "Als Startpunkt festlegen", "openIn": "In {app} öffnen", "closeChoices": "Routenoptionen schließen", "fromStartingPoint": "Vom Startpunkt: {name}", "fromCurrentLocation": "Von meinem aktuellen Standort" },
+  "categories": {
+    "What to do": "Aktivitäten", "Outdoor activities": "Outdoor-Aktivitäten", "Sea activities": "Wasseraktivitäten", "Gastronomy": "Gastronomie", "Wineries": "Weingüter", "Winery": "Weingut", "Hotels": "Hotels", "Where to eat/drink": "Essen / Trinken", "What to see": "Sehenswürdigkeiten", "Sites and museums": "Sehenswürdigkeiten und Museen", "Gorges": "Schluchten", "Beaches": "Strände", "Villages": "Dörfer", "Festivals": "Festivals", "Tips from the locals": "Tipps von Einheimischen", "Information": "Informationen",
+    "What to do.description": "Aktivitäten, Weingüter und Gastronomie in der Nähe.", "Hotels.description": "Unterkünfte in der Nähe.", "Where to eat/drink.description": "Lokale Speisen und Getränke in der Nähe.", "What to see.description": "Sehenswürdigkeiten und Orte zum Entdecken.", "Tips from the locals.description": "Lokale Tipps und Empfehlungen.", "Information.description": "Nützliche Informationen für Ihren Besuch."
+  }
+}

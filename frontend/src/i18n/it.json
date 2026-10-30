@@ -1,0 +1,15 @@
+{
+  "language": "Lingua",
+  "panel": { "collapse": "Comprimi pannello", "expand": "Espandi pannello" },
+  "map": { "interactiveMap": "Mappa interattiva", "searchLocation": "Cerca una località", "cityOrAddress": "Città o indirizzo", "searchPlaceholder": "Cerca una città o un indirizzo", "search": "Cerca", "searching": "Ricerca…", "noLocation": "Nessuna località trovata.", "showOnMap": "Mostra sulla mappa", "selectAll": "Seleziona tutto", "deselectAll": "Deseleziona tutto", "markerVisibility": "Visibilità dei luoghi", "mapLayers": "Livelli della mappa", "notes": "Note" },
+  "languages": { "en": "Inglese", "fr": "Francese", "de": "Tedesco", "it": "Italiano" },
+  "header": { "tagline": "Luoghi da scoprire, scelti per TE!", "until": "Fino al" },
+  "history": { "zone": "Zona", "learnMore": "Scopri di più", "open": "Apri la storia", "close": "Chiudi la storia", "title": "Storia", "switchZone": "Vai alla zona successiva" },
+  "places": { "title": "Luoghi", "showAll": "Mostra tutti i luoghi", "search": "Cerca luoghi", "currentView": "LUOGHI NELLA VISTA ATTUALE", "searchResults": "RISULTATI DELLA RICERCA ({count})", "routeFrom": "Percorso da", "clearRoute": "Cancella il punto di partenza" },
+  "category": { "category": "Categoria", "center": "Centra e ingrandisci questa categoria", "close": "Chiudi i luoghi della categoria", "search": "Cerca in questa categoria", "closeSearch": "Chiudi la ricerca", "searchPlaceholder": "Cerca in questa categoria", "place": "luogo", "places": "luoghi" },
+  "detail": { "details": "Dettagli di {name}", "back": "Torna ai luoghi della categoria", "center": "Centra e ingrandisci questo luogo", "close": "Torna ai luoghi", "previousPicture": "Immagine precedente", "nextPicture": "Immagine successiva", "visitWebsite": "Visita il sito web", "goThere": "Vai qui", "opensIn": "Si apre in {app}", "startingPoint": "Punto di partenza", "setStartPoint": "Imposta come partenza", "openIn": "Apri in {app}", "closeChoices": "Chiudi le opzioni del percorso", "fromStartingPoint": "Dal punto di partenza: {name}", "fromCurrentLocation": "Dalla posizione attuale" },
+  "categories": {
+    "What to do": "Cosa fare", "Outdoor activities": "Attività all'aperto", "Sea activities": "Attività sul mare", "Gastronomy": "Gastronomia", "Wineries": "Cantine", "Winery": "Cantina", "Hotels": "Hotel", "Where to eat/drink": "Dove mangiare e bere", "What to see": "Cosa vedere", "Sites and museums": "Siti e musei", "Gorges": "Gole", "Beaches": "Spiagge", "Villages": "Villaggi", "Festivals": "Festival", "Tips from the locals": "Consigli degli abitanti", "Information": "Informazioni",
+    "What to do.description": "Attività, cantine e gastronomia nei dintorni.", "Hotels.description": "Strutture dove soggiornare nelle vicinanze.", "Where to eat/drink.description": "Cucina e bevande locali nei dintorni.", "What to see.description": "Luoghi e attrazioni da scoprire nelle vicinanze.", "Tips from the locals.description": "Consigli e suggerimenti del posto.", "Information.description": "Informazioni utili per la visita."
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "language": "Language",
+  "panel": { "collapse": "Collapse panel", "expand": "Expand panel" },
+  "map": { "interactiveMap": "Interactive map", "searchLocation": "Search a geographic location", "cityOrAddress": "City or address", "searchPlaceholder": "Search a city or address", "search": "Search", "searching": "Searching…", "noLocation": "No location found.", "showOnMap": "Show on map", "selectAll": "Select all", "deselectAll": "Deselect all", "markerVisibility": "Marker visibility", "mapLayers": "Map layers", "notes": "Notes" },
+  "languages": { "en": "English", "fr": "Français", "de": "Deutsch" },
+  "header": { "tagline": "Places worth discovering, chosen for YOU!", "until": "Until" },
+  "history": { "zone": "Zone", "learnMore": "Learn more", "open": "Open history", "close": "Close history", "title": "History", "switchZone": "Go to next zone" },
+  "places": { "title": "Places", "showAll": "Show all places", "search": "Search places", "currentView": "PLACES IN CURRENT VIEW", "searchResults": "SEARCH RESULTS ({count})", "routeFrom": "Route from", "clearRoute": "Clear route starting point" },
+  "category": { "category": "Category", "center": "Center and zoom on this category", "close": "Close category places", "search": "Search this category", "closeSearch": "Close search", "searchPlaceholder": "Search in this category", "place": "place", "places": "places" },
+  "detail": { "details": "{name} details", "back": "Back to category places", "center": "Center and zoom on this place", "close": "Back to places", "previousPicture": "Previous picture", "nextPicture": "Next picture", "visitWebsite": "Visit website", "goThere": "Go there", "opensIn": "Opens in {app}", "startingPoint": "Starting point", "setStartPoint": "Set start point", "openIn": "Open in {app}", "closeChoices": "Close route choices", "fromStartingPoint": "From starting point: {name}", "fromCurrentLocation": "From current location" },
+  "categories": {
+    "What to do": "What to do", "Outdoor activities": "Outdoor activities", "Sea activities": "Sea activities", "Gastronomy": "Gastronomy", "Wineries": "Wineries", "Winery": "Winery", "Hotels": "Hotels", "Where to eat/drink": "Where to eat/drink", "What to see": "What to see", "Sites and museums": "Sites and museums", "Gorges": "Gorges", "Beaches": "Beaches", "Villages": "Villages", "Festivals": "Festivals", "Tips from the locals": "Tips from the locals", "Information": "Information",
+    "What to do.description": "Activities, wineries and gastronomy nearby.", "Hotels.description": "Places to stay nearby.", "Where to eat/drink.description": "Local food and drink nearby.", "What to see.description": "Sights and places to discover nearby.", "Tips from the locals.description": "Local tips and recommendations.", "Information.description": "Useful information for your visit."
+  }
+}

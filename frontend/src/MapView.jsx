@@ -56,8 +56,7 @@ function revealRecordOnMap(map, record) {
   });
   const horizontalEdgeThreshold = mapWidth * 0.1;
   const verticalEdgeThreshold = window.innerHeight * 0.1;
-  const tooCloseToEdge = distances.left < horizontalEdgeThreshold ||
-    distances.right < horizontalEdgeThreshold ||
+  const tooCloseToEdge = distances.left < horizontalEdgeThreshold || distances.right < horizontalEdgeThreshold ||
     (distances.top !== null && distances.top < verticalEdgeThreshold) ||
     (distances.bottom !== null && distances.bottom < verticalEdgeThreshold);
   if (tooCloseToEdge && historyRect && halfPanelTop !== null) {
@@ -68,7 +67,7 @@ function revealRecordOnMap(map, record) {
   }
 }
 
-export default function MapView({ mapAction, mode, places, notes, zones, selectedZoneId, zoneDraft, zoneBoundsLocked = false, categories, hiddenCategoryIds, notesVisible, onToggleCategory, onToggleNotes, onShowAll, onHideAll, picking, draftKind, draftLocation, editingRecord, editingCategory, selectedRecord, onPickLocation, onMoveDraftLocation, onSelectRecord, onDeselectRecord, onSelectZone, onDeselectZone, onZoneBoundsChange, onZoneDrawingChange, onViewportChange, onEmptyMapClick, onUserLocation, sharing = false, showNotesOption = true, geolocate = true, travellerLayout = false }) {
+export default function MapView({ mapAction, mode, places, notes, zones, selectedZoneId, zoneDraft, zoneBoundsLocked = false, categories, hiddenCategoryIds, notesVisible, onToggleCategory, onToggleNotes, onShowAll, onHideAll, picking, draftKind, draftLocation, editingRecord, editingCategory, selectedRecord, onPickLocation, onMoveDraftLocation, onSelectRecord, onDeselectRecord, onSelectZone, onDeselectZone, onZoneBoundsChange, onZoneDrawingChange, onViewportChange, onEmptyMapClick, onUserLocation, sharing = false, showNotesOption = true, geolocate = true, travellerLayout = false, clientT, clientTranslateCategoryName }) {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
   const adminCameraRef = useRef(null);
@@ -271,12 +270,15 @@ export default function MapView({ mapAction, mode, places, notes, zones, selecte
       });
     } else if (mapAction.type === 'zone') {
       const zone = mapAction.zone;
-      map.fitBounds([[zone.min_lon, zone.min_lat], [zone.max_lon, zone.max_lat]], {
-        padding: {
+      const padding = mapAction.fullPage
+        ? { top: mobile ? 64 : 40, right: 40, bottom: 40, left: 40 }
+        : {
           top: 55, right: 55,
           bottom: mobile ? Math.min(420, height * 0.6) : 55,
           left: mobile ? 55 : Math.min(390, width * 0.4),
-        },
+        };
+      map.fitBounds([[zone.min_lon, zone.min_lat], [zone.max_lon, zone.max_lat]], {
+        padding,
         maxZoom: 12,
         duration: 650,
       });
@@ -690,8 +692,9 @@ export default function MapView({ mapAction, mode, places, notes, zones, selecte
 
   return (
     <div className="map-area">
-      <div className="map-canvas" ref={containerRef} aria-label="Interactive map of Crete" />
+      <div className="map-canvas" ref={containerRef} aria-label={clientT?.('map.interactiveMap') ?? 'Interactive map of Crete'} />
       <GeoSearch
+        t={clientT}
         query={geoQuery}
         results={geoResults}
         busy={geoBusy}
@@ -708,12 +711,15 @@ export default function MapView({ mapAction, mode, places, notes, zones, selecte
       />
       {topRightControlNode && createPortal(<>
         <MapStyleControl
+          t={clientT}
           selectedStyle={selectedStyle}
           open={styleMenuOpen}
           onToggle={() => { setVisibilityOpen(false); setStyleMenuOpen((open) => !open); }}
           onChoose={chooseStyle}
         />
         <MapVisibilityControl
+          t={clientT}
+          translateCategoryName={clientTranslateCategoryName}
           categories={categories}
           hiddenCategoryIds={hiddenCategoryIds}
           notesVisible={notesVisible}

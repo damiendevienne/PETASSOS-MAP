@@ -1,0 +1,15 @@
+{
+  "language": "Langue",
+  "panel": { "collapse": "Réduire le panneau", "expand": "Développer le panneau" },
+  "map": { "interactiveMap": "Carte interactive", "searchLocation": "Rechercher un lieu", "cityOrAddress": "Ville ou adresse", "searchPlaceholder": "Rechercher une ville ou une adresse", "search": "Rechercher", "searching": "Recherche…", "noLocation": "Aucun lieu trouvé.", "showOnMap": "Afficher sur la carte", "selectAll": "Tout sélectionner", "deselectAll": "Tout désélectionner", "markerVisibility": "Visibilité des marqueurs", "mapLayers": "Couches de la carte", "notes": "Notes" },
+  "languages": { "en": "English", "fr": "Français", "de": "Deutsch" },
+  "header": { "tagline": "Des lieux qui méritent d’être découverts, choisis pour VOUS !", "until": "Jusqu’au" },
+  "history": { "zone": "Zone", "learnMore": "En savoir plus", "open": "Ouvrir l’histoire", "close": "Fermer l’histoire", "title": "Histoire", "switchZone": "Aller à la zone suivante" },
+  "places": { "title": "Lieux", "showAll": "Afficher tous les lieux", "search": "Rechercher un lieu", "currentView": "LIEUX DANS LA VUE ACTUELLE", "searchResults": "RÉSULTATS ({count})", "routeFrom": "Itinéraire depuis", "clearRoute": "Supprimer le point de départ" },
+  "category": { "category": "Catégorie", "center": "Centrer et zoomer sur cette catégorie", "close": "Fermer les lieux de cette catégorie", "search": "Rechercher dans cette catégorie", "closeSearch": "Fermer la recherche", "searchPlaceholder": "Rechercher dans cette catégorie", "place": "lieu", "places": "lieux" },
+  "detail": { "details": "Détails de {name}", "back": "Retour aux lieux de la catégorie", "center": "Centrer et zoomer sur ce lieu", "close": "Retour aux lieux", "previousPicture": "Photo précédente", "nextPicture": "Photo suivante", "visitWebsite": "Visiter le site web", "goThere": "Itinéraire", "opensIn": "Ouvre dans {app}", "startingPoint": "Point de départ", "setStartPoint": "Définir comme départ", "openIn": "Ouvrir dans {app}", "closeChoices": "Fermer les choix d’itinéraire", "fromStartingPoint": "Depuis le point de départ : {name}", "fromCurrentLocation": "Depuis ma position actuelle" },
+  "categories": {
+    "What to do": "À faire", "Outdoor activities": "Activités de plein air", "Sea activities": "Activités nautiques", "Gastronomy": "Gastronomie", "Wineries": "Vignobles", "Winery": "Vignoble", "Hotels": "Hôtels", "Where to eat/drink": "Où manger / boire", "What to see": "À voir", "Sites and museums": "Sites et musées", "Gorges": "Gorges", "Beaches": "Plages", "Villages": "Villages", "Festivals": "Festivals", "Tips from the locals": "Conseils des locaux", "Information": "Informations",
+    "What to do.description": "Activités, vignobles et gastronomie à proximité.", "Hotels.description": "Des lieux où séjourner à proximité.", "Where to eat/drink.description": "Gastronomie et boissons locales à proximité.", "What to see.description": "Sites et lieux à découvrir à proximité.", "Tips from the locals.description": "Conseils et recommandations des locaux.", "Information.description": "Informations utiles pour votre visite."
+  }
+}

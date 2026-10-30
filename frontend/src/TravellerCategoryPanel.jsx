@@ -4,7 +4,7 @@ import RecordCard from './RecordCard.jsx';
 import { categoryIconUrl } from './markerIcons.js';
 import { distanceInKm } from './geoDistance.js';
 
-export default function TravellerCategoryPanel({ group, places, clientPosition, snap, onSnapChange, onClose, onSelectPlace, onFocus }) {
+export default function TravellerCategoryPanel({ group, places, clientPosition, snap, onSnapChange, onClose, onSelectPlace, onFocus, t, translateCategoryName, translateCategoryDescription }) {
   const sheetRef = useRef(null);
   const dragRef = useRef(null);
   const suppressHandleClickRef = useRef(false);
@@ -89,32 +89,32 @@ export default function TravellerCategoryPanel({ group, places, clientPosition, 
   }
 
   return (
-    <aside ref={sheetRef} className={`traveller-place-detail-panel traveller-category-panel${dragging ? ' is-dragging' : ''}`} data-snap={snap} style={dragHeight ? { height: `${dragHeight}px` } : undefined} aria-label={`${group.name} places`}>
-      <MobileSheetHandle expanded onToggle={toggleSnap} className="traveller-place-detail-handle" onPointerDown={startDrag} onPointerMove={dragSheet} onPointerUp={finishDrag} />
+    <aside ref={sheetRef} className={`traveller-place-detail-panel traveller-category-panel${dragging ? ' is-dragging' : ''}`} data-snap={snap} style={dragHeight ? { height: `${dragHeight}px` } : undefined} aria-label={`${translateCategoryName(group.name)} ${t('category.places')}`}>
+      <MobileSheetHandle expanded onToggle={toggleSnap} className="traveller-place-detail-handle" onPointerDown={startDrag} onPointerMove={dragSheet} onPointerUp={finishDrag} t={t} />
       <div className="traveller-place-detail-scroll">
         <div className="traveller-category-heading">
           <div className="traveller-place-detail-title">
             <span className="traveller-category-heading-icon" style={{ backgroundColor: group.color }}><img src={categoryIconUrl(group.icon)} alt="" /></span>
-            <div><small>Category</small><h2 ref={categoryTitleRef}>{group.name}</h2></div>
+            <div><small>{t('category.category')}</small><h2 ref={categoryTitleRef}>{translateCategoryName(group.name)}</h2></div>
           </div>
           <div className="traveller-place-detail-heading-actions">
-            <button className="traveller-place-detail-focus" type="button" onClick={onFocus} aria-label="Center and zoom on this category" title="Center and zoom on this category">
+            <button className="traveller-place-detail-focus" type="button" onClick={onFocus} aria-label={t('category.center')} title={t('category.center')}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
                 <circle cx="12" cy="12" r="6.5" />
                 <circle cx="12" cy="12" r="2" />
                 <path d="M12 2v3m0 14v3M2 12h3m14 0h3" />
               </svg>
             </button>
-            <button className="traveller-category-search-button" type="button" onClick={toggleCategorySearch} aria-label={searchOpen ? 'Close category search' : 'Search this category'} title={searchOpen ? 'Close search' : 'Search'}>
+            <button className="traveller-category-search-button" type="button" onClick={toggleCategorySearch} aria-label={searchOpen ? t('category.closeSearch') : t('category.search')} title={searchOpen ? t('category.closeSearch') : t('category.search')}>
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8" /><path d="m16 16 5 5" /></svg>
             </button>
-            <button className="traveller-place-detail-close" type="button" onClick={onClose} aria-label="Close category places" title="Close">×</button>
+            <button className="traveller-place-detail-close" type="button" onClick={onClose} aria-label={t('category.close')} title={t('category.close')}>×</button>
           </div>
         </div>
-        {searchOpen && <input className="traveller-category-search" type="search" autoFocus aria-label={`Search ${group.name}`} placeholder="Search in this category" value={query} onChange={(event) => setQuery(event.target.value)} />}
-        <div className="traveller-category-peek-summary" aria-label={`${places.length} places in ${group.name}`}>
-          <strong>{places.length} place{places.length === 1 ? '' : 's'}</strong>
-          <p>{group.description}</p>
+        {searchOpen && <input className="traveller-category-search" type="search" autoFocus aria-label={`${t('category.search')} ${translateCategoryName(group.name)}`} placeholder={t('category.searchPlaceholder')} value={query} onChange={(event) => setQuery(event.target.value)} />}
+        <div className="traveller-category-peek-summary" aria-label={`${places.length} ${t(places.length === 1 ? 'category.place' : 'category.places')} ${translateCategoryName(group.name)}`}>
+          <strong>{places.length} {t(places.length === 1 ? 'category.place' : 'category.places')}</strong>
+          <p>{translateCategoryDescription(group.name)}</p>
         </div>
         <div className="traveller-category-list">
           {filteredPlaces.map((place) => <RecordCard
@@ -123,6 +123,7 @@ export default function TravellerCategoryPanel({ group, places, clientPosition, 
             selected={false}
             coverUrl={place.images?.[0]?.url}
             coverAlt={place.images?.[0]?.caption || ''}
+            categoryLabel={translateCategoryName(place.category_name)}
             onSelect={() => onSelectPlace(place)}
             distanceKm={clientPosition ? distanceInKm(clientPosition, place) : null}
           />)}
