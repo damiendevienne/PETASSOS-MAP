@@ -4,6 +4,29 @@ import { categoryGroups } from './categories.js';
 import { api } from './api.js';
 import { RECORD_KINDS, collectionForKind } from './constants.js';
 
+const PLACE_LANGUAGES = ['en', 'fr', 'de', 'it'];
+
+function emptyTranslations(record) {
+  return PLACE_LANGUAGES.reduce((result, language) => {
+    const stored = record?.translations?.[language];
+    result[language] = {
+      name: stored?.name ?? (language === 'en' ? record?.name ?? '' : ''),
+      description: stored?.description ?? (language === 'en' ? record?.description ?? '' : ''),
+      practical_info: stored?.practical_info ?? (language === 'en' ? record?.practical_info ?? '' : ''),
+    };
+    return result;
+  }, {});
+}
+
+function LanguageTabs({ language, onChange, label, translations, field }) {
+  return <div className="place-form-language-tabs" role="tablist" aria-label={`${label} language`}>
+    {PLACE_LANGUAGES.map((item) => {
+      const hasContent = Boolean(translations[item]?.[field]?.trim());
+      return <button key={item} type="button" role="tab" aria-selected={language === item} className={language === item ? 'active' : ''} onClick={() => onChange(item)} title={`${item.toUpperCase()} ${hasContent ? 'filled' : 'empty'}`}><span>{item.toUpperCase()}</span><i className={`place-form-language-status${hasContent ? ' filled' : ''}`} aria-hidden="true" /></button>;
+    })}
+  </div>;
+}
+
 function CategoryPicker({ categories, value, onChange }) {
   const pickerRef = useRef(null);
   const selected = categories.find((category) => category.id === Number(value));
@@ -40,6 +63,8 @@ export default function RecordForm({ kind, record, location, categories, onCateg
   const selectedGroup = groups.find((group) => group.id === (selectedCategory?.parent_id ?? selectedCategory?.id));
   const [description, setDescription] = useState(record?.description ?? '');
   const [practicalInfo, setPracticalInfo] = useState(record?.practical_info ?? '');
+  const [language, setLanguage] = useState('en');
+  const [translations, setTranslations] = useState(() => emptyTranslations(record));
   const [author, setAuthor] = useState(record?.author ?? '');
   const [linkUrl, setLinkUrl] = useState(record?.link_url ?? '');
   const [published, setPublished] = useState(isNote ? false : Boolean(record?.published ?? true));
@@ -52,6 +77,16 @@ export default function RecordForm({ kind, record, location, categories, onCateg
   const initialRecordIdRef = useRef(record?.id ?? null);
   const initialLocationRef = useRef(location);
   const initialCategoryIdRef = useRef(categoryId);
+  const initialTranslationsRef = useRef(emptyTranslations(record));
+
+  const activeTranslation = translations[language];
+
+  function updateTranslation(field, value) {
+    setTranslations((current) => ({
+      ...current,
+      [language]: { ...current[language], [field]: value },
+    }));
+  }
 
   useEffect(() => {
     if (!initialRecordIdRef.current) return undefined;
@@ -72,13 +107,14 @@ export default function RecordForm({ kind, record, location, categories, onCateg
     images.length !== initialImageIdsRef.current.length ||
     images.some((image, index) => image.file || image.id !== initialImageIdsRef.current[index] || image.caption !== image.originalCaption)
   ));
+  const translationsDirty = !isNote && JSON.stringify(translations) !== JSON.stringify(initialTranslationsRef.current);
   const isDirty = record ? (
-    name !== record.name || (!isNote && Number(categoryId) !== record.category_id) ||
-    description !== (record.description ?? '') || practicalInfo !== (record.practical_info ?? '') || author !== (record.author ?? '') ||
+    (isNote ? name !== record.name : translationsDirty) || (!isNote && Number(categoryId) !== record.category_id) ||
+    (isNote && (description !== (record.description ?? '') || practicalInfo !== (record.practical_info ?? ''))) || author !== (record.author ?? '') ||
     linkUrl !== (record.link_url ?? '') || published !== Boolean(record.published) ||
     location.latitude !== record.latitude || location.longitude !== record.longitude
   ) : (
-    name !== '' || description !== '' || practicalInfo !== '' || author !== '' || linkUrl !== '' || (!isNote && !published) ||
+    (isNote ? name !== '' || description !== '' || practicalInfo !== '' : translationsDirty) || author !== '' || linkUrl !== '' || (!isNote && !published) ||
     (!isNote && categoryId !== initialCategoryIdRef.current) ||
     location.latitude !== initialLocationRef.current.latitude || location.longitude !== initialLocationRef.current.longitude
   );
@@ -110,6 +146,7 @@ export default function RecordForm({ kind, record, location, categories, onCateg
     setSaving(true);
     setError('');
     try {
+      const primaryTranslation = PLACE_LANGUAGES.map((item) => translations[item]).find((item) => item.name.trim()) ?? translations.en;
       const newFiles = [];
       const manifest = images.map((image) => {
         if (!image.file) return { id: image.id, caption: image.caption };
@@ -117,7 +154,12 @@ export default function RecordForm({ kind, record, location, categories, onCateg
         return { new_index: newFiles.length - 1, caption: image.caption };
       });
       await onSave({
-        name, category_id: isNote ? null : Number(categoryId), description, practical_info: practicalInfo, author,
+        name: isNote ? name : primaryTranslation.name,
+        category_id: isNote ? null : Number(categoryId),
+        description: isNote ? description : primaryTranslation.description,
+        practical_info: isNote ? practicalInfo : primaryTranslation.practical_info,
+        ...(isNote ? {} : { translations }),
+        author,
         link_url: linkUrl.trim() || null, published: isNote ? false : published,
         latitude: location.latitude, longitude: location.longitude,
       }, { manifest, newFiles, dirty: imagesDirty });
@@ -132,8 +174,14 @@ export default function RecordForm({ kind, record, location, categories, onCateg
     <form className={`place-form${isNote ? ' note-form' : ''}`} onSubmit={handleSubmit}>
       <p className="place-form-position">Drag the map marker to adjust its position.</p>
       {isNote && <p className="note-hint">Internal note — never shared</p>}
-      <label htmlFor="place-name">Name *</label>
-      <input id="place-name" value={name} onChange={(event) => setName(event.target.value)} required autoFocus />
+      {isNote ? <>
+        <label htmlFor="place-name">Name *</label>
+        <input id="place-name" value={name} onChange={(event) => setName(event.target.value)} required autoFocus />
+      </> : <div className="localized-form-field">
+        <label htmlFor="place-name">Name <span className="optional-label">(at least one language required)</span></label>
+        <LanguageTabs language={language} onChange={setLanguage} label="Name" translations={translations} field="name" />
+        <input id="place-name" value={activeTranslation.name} onChange={(event) => updateTranslation('name', event.target.value)} autoFocus />
+      </div>}
       {!isNote && <>
         <span className="field-label">Category *</span>
         <CategoryPicker categories={groups} value={selectedGroup?.id} onChange={(id) => {
@@ -145,12 +193,18 @@ export default function RecordForm({ kind, record, location, categories, onCateg
           <CategoryPicker categories={selectedGroup.categories} value={categoryId} onChange={(id) => { setCategoryId(id); onCategoryChange(id); }} />
         </>}
       </>}
-      <label htmlFor="place-description">Description <span className="optional-label">(optional)</span></label>
-      <textarea id="place-description" value={description} onChange={(event) => setDescription(event.target.value)} rows="4" />
-      {!isNote && <>
+      <div className={isNote ? undefined : 'localized-form-field'}>
+        {isNote ? <label htmlFor="place-description">Description <span className="optional-label">(optional)</span></label> : <>
+          <label htmlFor="place-description">Description <span className="optional-label">(optional)</span></label>
+          <LanguageTabs language={language} onChange={setLanguage} label="Description" translations={translations} field="description" />
+        </>}
+        <textarea id="place-description" value={isNote ? description : activeTranslation.description} onChange={(event) => isNote ? setDescription(event.target.value) : updateTranslation('description', event.target.value)} rows="4" />
+      </div>
+      {!isNote && <div className="localized-form-field">
         <label htmlFor="place-practical-info">Practical information <span className="optional-label">(optional)</span></label>
-        <textarea id="place-practical-info" placeholder="Duration, format, departure point, inclusions…" value={practicalInfo} onChange={(event) => setPracticalInfo(event.target.value)} rows="3" />
-      </>}
+        <LanguageTabs language={language} onChange={setLanguage} label="Practical information" translations={translations} field="practical_info" />
+        <textarea id="place-practical-info" placeholder="Duration, format, departure point, inclusions…" value={activeTranslation.practical_info} onChange={(event) => updateTranslation('practical_info', event.target.value)} rows="3" />
+      </div>}
       <div className="coordinate-fields">
         <label htmlFor="place-latitude">Latitude *<input id="place-latitude" type="text" value={location.latitude.toFixed(5)} disabled /></label>
         <label htmlFor="place-longitude">Longitude *<input id="place-longitude" type="text" value={location.longitude.toFixed(5)} disabled /></label>

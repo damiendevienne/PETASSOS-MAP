@@ -8,7 +8,7 @@
 .traveller-heading strong { font-size: 18px; line-height: 1.2; }
 .traveller-heading small { color: #64748e; font-size: 12px; }
 .traveller-language-selector { display: inline-flex; align-items: center; gap: 5px; flex: none; color: #64748e; font-size: 10px; font-weight: 700; text-transform: uppercase; }
-.traveller-language-icon { width: 16px; height: 16px; flex: none; }
+.traveller-language-icon { display: block; width: 16px !important; height: 16px !important; min-width: 16px; min-height: 16px; max-width: 16px; max-height: 16px; flex: none; }
 .traveller-heading .traveller-language-selector { justify-self: end; }
 .traveller-language-selector select { padding: 5px 4px; border: 1px solid #c8d4df; border-radius: 5px; background: #fff; color: #233b59; font-size: 11px; font-weight: 700; }
 .traveller-tagline { margin: 0; padding-left: 22px; border-left: 1px solid #d4dfe8; color: #566c83; font-family: Raleway, Arial, Helvetica, sans-serif; font-size: 17px; font-weight: 600; white-space: nowrap; }
