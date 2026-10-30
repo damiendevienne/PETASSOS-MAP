@@ -128,7 +128,12 @@
 .traveller-image-gallery img { width: 90px; height: 65px; object-fit: cover; border-radius: 5px; }
 @media (min-width: 701px) {
   .sheet-handle { display: none; }
-  .traveller-map-category-buttons { right: 55px; left: 382px; justify-content: center; }
+  .traveller-map-category-buttons { right: 55px; left: 382px; justify-content: center; flex-wrap: wrap; row-gap: 8px; }
+}
+
+@media (min-width: 701px) and (max-width: 1499px) {
+  .traveller-place-detail-panel { z-index: 4; top: 20px; bottom: 20px; left: 20px; width: min(360px, calc(100% - 40px)); border-radius: 12px; }
+  .traveller-place-selected .traveller-map-category-buttons { left: 382px; }
 }
 
 @media (max-width: 700px) {
