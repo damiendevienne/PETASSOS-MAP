@@ -22,7 +22,7 @@ if __package__:
         revoke_session,
         session_identity,
     )
-    from .database import connect_database, initialize_database
+    from .database import SUPPORTED_PLACE_LANGUAGES, connect_database, initialize_database, place_translations
     from .images import router as images_router, remove_record_files
     from .sharing import router as sharing_router, public_router as public_sharing_router
     from .zones import router as zones_router
@@ -40,7 +40,7 @@ else:
         revoke_session,
         session_identity,
     )
-    from database import connect_database, initialize_database
+    from database import SUPPORTED_PLACE_LANGUAGES, connect_database, initialize_database, place_translations
     from images import router as images_router, remove_record_files
     from sharing import router as sharing_router, public_router as public_sharing_router
     from zones import router as zones_router
@@ -65,6 +65,12 @@ def health() -> dict[str, str]:
 class LoginRequest(BaseModel):
     username: str
     password: str
+
+
+class PlaceTranslation(BaseModel):
+    name: str = ""
+    description: str = ""
+    practical_info: str = ""
 
 
 def auth_settings(request: Request) -> AuthSettings:
@@ -115,6 +121,7 @@ class NewRecord(BaseModel):
     author: str = ""
     link_url: AnyHttpUrl | None = None
     published: bool = False
+    translations: dict[str, PlaceTranslation] = Field(default_factory=dict)
 
 
 class ArchiveInput(BaseModel):
@@ -137,6 +144,31 @@ def admin_categories() -> list[dict]:
     return [dict(row) for row in rows]
 
 
+def _localized_place_values(record: NewRecord) -> tuple[str, str, str, dict[str, dict[str, str]]]:
+    translations = {}
+    for language, values in record.translations.items():
+        if language not in SUPPORTED_PLACE_LANGUAGES:
+            raise HTTPException(status_code=422, detail=f"Unsupported place language: {language}")
+        translations[language] = {
+            "name": values.name.strip(),
+            "description": values.description.strip(),
+            "practical_info": values.practical_info.strip(),
+        }
+    if not translations:
+        translations["en"] = {
+            "name": record.name.strip(),
+            "description": record.description.strip(),
+            "practical_info": record.practical_info.strip(),
+        }
+    if not any(values["name"] for values in translations.values()):
+        raise HTTPException(status_code=422, detail="Enter a name in at least one language")
+    primary_language = "en" if translations.get("en", {}).get("name") else next(
+        language for language in SUPPORTED_PLACE_LANGUAGES if translations.get(language, {}).get("name")
+    )
+    primary = translations[primary_language]
+    return primary["name"], primary["description"], primary["practical_info"], translations
+
+
 def _records(kind: str, archived: bool = False) -> list[dict]:
     with closing(connect_database()) as connection:
         rows = connection.execute(
@@ -152,11 +184,18 @@ def _records(kind: str, archived: bool = False) -> list[dict]:
             f"WHERE places.kind = ? AND places.archived_at IS {'NOT ' if archived else ''}NULL "
             "ORDER BY places.id DESC", (kind,)
         ).fetchall()
-    return [dict(row) for row in rows]
+        records = [dict(row) for row in rows]
+        if kind == "PLACE":
+            for record in records:
+                record["translations"] = place_translations(connection, record["id"])
+        return records
 
 
 def _save_record(kind: str, record: NewRecord, record_id: int | None = None) -> dict:
-    name = record.name.strip()
+    if kind == "PLACE":
+        name, description, practical_info, translations = _localized_place_values(record)
+    else:
+        name, description, practical_info, translations = record.name.strip(), record.description.strip(), record.practical_info.strip(), {}
     if not name:
         raise HTTPException(status_code=422, detail="Name is required")
     with closing(connect_database()) as connection, connection:
@@ -175,7 +214,7 @@ def _save_record(kind: str, record: NewRecord, record_id: int | None = None) -> 
         elif record.category_id is not None or record.published:
             raise HTTPException(status_code=422, detail="Notes cannot have a category or be published")
         values = (
-            record.category_id, name, record.description.strip(), record.practical_info.strip(), record.author.strip(),
+            record.category_id, name, description, practical_info, record.author.strip(),
             str(record.link_url) if record.link_url else None,
             record.latitude, record.longitude, int(record.published),
         )
@@ -194,6 +233,13 @@ def _save_record(kind: str, record: NewRecord, record_id: int | None = None) -> 
                 "updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?",
                 (*values, record_id),
             )
+        if kind == "PLACE":
+            connection.execute("DELETE FROM place_translations WHERE place_id = ?", (record_id,))
+            connection.executemany(
+                "INSERT INTO place_translations (place_id, language, name, description, practical_info) VALUES (?, ?, ?, ?, ?)",
+                [(record_id, language, values["name"], values["description"], values["practical_info"])
+                 for language, values in translations.items()],
+            )
         row = connection.execute(
             "SELECT places.id, places.kind, places.name, places.description, places.practical_info, places.author, places.link_url, "
             "places.latitude, places.longitude, places.published, places.category_id, places.archived_at, "
@@ -206,7 +252,10 @@ def _save_record(kind: str, record: NewRecord, record_id: int | None = None) -> 
             "LEFT JOIN categories parent ON parent.id = categories.parent_id "
             "WHERE places.id = ?", (record_id,)
         ).fetchone()
-    return dict(row)
+        result = dict(row)
+        if kind == "PLACE":
+            result["translations"] = place_translations(connection, record_id)
+    return result
 
 
 def _delete_record(kind: str, record_id: int) -> None:
@@ -341,6 +390,10 @@ async def admin_import_places(file: UploadFile = File(...)) -> dict:
                     ),
                 )
                 created.append({"line": line_number, "id": cursor.lastrowid, "name": name})
+                connection.execute(
+                    "INSERT INTO place_translations (place_id, language, name, description, practical_info) VALUES (?, 'en', ?, ?, ?)",
+                    (cursor.lastrowid, name, (row.get("description") or "").strip(), (row.get("practical_info") or "").strip()),
+                )
             except (ValueError, TypeError) as error:
                 errors.append({"line": line_number, "name": (row.get("name") or "").strip(), "error": str(error)})
     return {"created": created, "errors": errors, "created_count": len(created), "error_count": len(errors)}

@@ -7,6 +7,22 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATABASE_NAME = "app.db"
+SUPPORTED_PLACE_LANGUAGES = ("en", "fr", "de", "it")
+
+
+def place_translations(connection: sqlite3.Connection, place_id: int) -> dict[str, dict[str, str]]:
+    rows = connection.execute(
+        "SELECT language, name, description, practical_info FROM place_translations WHERE place_id = ?",
+        (place_id,),
+    ).fetchall()
+    return {
+        row["language"]: {
+            "name": row["name"] or "",
+            "description": row["description"] or "",
+            "practical_info": row["practical_info"] or "",
+        }
+        for row in rows
+    }
 
 # Original categories are kept here for the first schema migration.
 LEGACY_CATEGORIES = (
@@ -394,7 +410,31 @@ def _migration_21(connection: sqlite3.Connection) -> None:
     connection.execute("ALTER TABLE places ADD COLUMN practical_info TEXT NOT NULL DEFAULT ''")
 
 
-MIGRATIONS = (_migration_1, _migration_2, _migration_3, _migration_4, _migration_5, _migration_6, _migration_7, _migration_8, _migration_9, _migration_10, _migration_11, _migration_12, _migration_13, _migration_14, _migration_15, _migration_16, _migration_17, _migration_18, _migration_19, _migration_20, _migration_21)
+def _migration_22(connection: sqlite3.Connection) -> None:
+    """Store localized place text independently from the legacy English columns."""
+    connection.execute(
+        """
+        CREATE TABLE place_translations (
+            place_id INTEGER NOT NULL REFERENCES places(id) ON DELETE CASCADE,
+            language TEXT NOT NULL CHECK (language IN ('en', 'fr', 'de', 'it')),
+            name TEXT NOT NULL DEFAULT '',
+            description TEXT NOT NULL DEFAULT '',
+            practical_info TEXT NOT NULL DEFAULT '',
+            PRIMARY KEY (place_id, language)
+        )
+        """
+    )
+    connection.execute(
+        """
+        INSERT INTO place_translations (place_id, language, name, description, practical_info)
+        SELECT id, 'en', name, COALESCE(description, ''), COALESCE(practical_info, '')
+        FROM places
+        WHERE kind = 'PLACE'
+        """
+    )
+
+
+MIGRATIONS = (_migration_1, _migration_2, _migration_3, _migration_4, _migration_5, _migration_6, _migration_7, _migration_8, _migration_9, _migration_10, _migration_11, _migration_12, _migration_13, _migration_14, _migration_15, _migration_16, _migration_17, _migration_18, _migration_19, _migration_20, _migration_21, _migration_22)
 
 
 def initialize_database(path: Path | None = None) -> Path:

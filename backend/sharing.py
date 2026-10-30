@@ -9,10 +9,10 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 if __package__:
-    from .database import connect_database
+    from .database import connect_database, place_translations
     from .images import upload_dir
 else:
-    from database import connect_database
+    from database import connect_database, place_translations
     from images import upload_dir
 
 
@@ -191,6 +191,7 @@ def public_shared_map(token: str) -> dict:
         public_places = []
         for row in places:
             place = dict(row)
+            place["translations"] = place_translations(connection, place["id"])
             place["images"] = [
                 {"id": image["id"], "caption": image["caption"] or "",
                  "url": f"/api/shared/{token}/images/{image['id']}"}

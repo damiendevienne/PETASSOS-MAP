@@ -9,7 +9,7 @@ import TravellerPlaceDetail from './TravellerPlaceDetail.jsx';
 import TravellerCategoryPanel from './TravellerCategoryPanel.jsx';
 import { api } from './api.js';
 import { distanceInKm } from './geoDistance.js';
-import { ClientI18nProvider, useClientI18n } from './i18n/clientI18n.jsx';
+import { ClientI18nProvider, localizePlace, useClientI18n } from './i18n/clientI18n.jsx';
 import { containsPoint } from './mapData.js';
 
 const noop = () => {};
@@ -73,19 +73,20 @@ function TravellerPageContent({ token }) {
     return () => controller.abort();
   }, [token]);
 
+  const clientPlaces = useMemo(() => (data?.places || []).map((place) => localizePlace(place, language)), [data, language]);
   const selectedZone = useMemo(() => (data?.zones || []).find((zone) => zone.id === selectedZoneId) ?? null, [data, selectedZoneId]);
   const zonePlaces = useMemo(() => {
-    if (!selectedZone) return data?.places || [];
-    return (data?.places || []).filter((place) => containsPoint(selectedZone, { lat: place.latitude, lng: place.longitude }));
-  }, [data, selectedZone]);
+    if (!selectedZone) return clientPlaces;
+    return clientPlaces.filter((place) => containsPoint(selectedZone, { lat: place.latitude, lng: place.longitude }));
+  }, [clientPlaces, selectedZone]);
   const presentCategories = useMemo(() => {
     const presentIds = new Set(zonePlaces.map((place) => place.category_id));
     return (data?.categories || []).filter((category) => presentIds.has(category.id));
   }, [data, zonePlaces]);
   const presentCategoryGroups = useMemo(() => categoryGroups(presentCategories), [presentCategories]);
   const visiblePlaces = useMemo(() => zonePlaces.filter((place) => !hiddenCategoryIds.includes(place.category_id)), [zonePlaces, hiddenCategoryIds]);
-  const routeStart = data?.places.find((place) => place.id === routeStartId);
-  const selectedPlace = data?.places.find((place) => place.id === selected?.id) ?? null;
+  const routeStart = clientPlaces.find((place) => place.id === routeStartId);
+  const selectedPlace = clientPlaces.find((place) => place.id === selected?.id) ?? null;
   const aboutZones = useMemo(() => (data?.zones || []).filter((zone) => zone.about_title && zone.about_text), [data]);
   const activeAboutZone = useMemo(() => aboutZones.reduce((closest, zone) => {
     if (!closest) return zone;
@@ -118,7 +119,7 @@ function TravellerPageContent({ token }) {
   function toggleCategory(categoryId) {
     const ids = Array.isArray(categoryId) ? categoryId : [categoryId];
     const hiding = ids.every((id) => !hiddenCategoryIds.includes(id));
-    if (hiding && ids.includes(data.places.find((place) => place.id === selected?.id)?.category_id)) setSelected(null);
+    if (hiding && ids.includes(clientPlaces.find((place) => place.id === selected?.id)?.category_id)) setSelected(null);
     setHiddenCategoryIds((current) => hiding ? [...current, ...ids] : current.filter((id) => !ids.includes(id)));
   }
 
@@ -142,13 +143,13 @@ function TravellerPageContent({ token }) {
       if (filteredCategoryId === group.id) {
         setFilteredCategoryId(null);
         setHiddenCategoryIds([]);
-        setMapAction({ type: 'fit', records: data.places });
+        setMapAction({ type: 'fit', records: clientPlaces });
       } else {
         setFilteredCategoryId(group.id);
         setHiddenCategoryIds(presentCategories.filter((category) => !categoryIds.has(category.id)).map((category) => category.id));
         setSelected(null);
         setSheetMode('none');
-        setMapAction({ type: 'fit', records: data.places.filter((place) => categoryIds.has(place.category_id)), category: true });
+        setMapAction({ type: 'fit', records: clientPlaces.filter((place) => categoryIds.has(place.category_id)), category: true });
       }
       return;
     }
@@ -157,7 +158,7 @@ function TravellerPageContent({ token }) {
       return;
     }
     const categoryIds = new Set(group.categories.map((category) => category.id));
-    const categoryPlaces = data.places.filter((place) => categoryIds.has(place.category_id));
+    const categoryPlaces = clientPlaces.filter((place) => categoryIds.has(place.category_id));
     setActiveCategoryId(group.id);
     setSelected(null);
     setSheetMode('category');
@@ -171,7 +172,7 @@ function TravellerPageContent({ token }) {
     setHiddenCategoryIds([]);
     setSelected(null);
     setSheetMode('none');
-    setMapAction({ type: 'fit', records: data.places });
+    setMapAction({ type: 'fit', records: clientPlaces });
   }
 
   function closePlaceDetail() {
@@ -222,7 +223,7 @@ function TravellerPageContent({ token }) {
       <label className="traveller-language-selector"><svg className="traveller-language-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3c2.5 2.5 3.5 5.5 3.5 9s-1 6.5-3.5 9c-2.5-2.5-3.5-5.5-3.5-9S9.5 5.5 12 3Z" /></svg><select value={language} onChange={(event) => setLanguage(event.target.value)} aria-label={t('language')} title={t('language')}><option value="en">EN</option><option value="fr">FR</option><option value="de">DE</option><option value="it">IT</option></select></label>
     </section>}
     <main className="traveller-main">
-      <MapView mapAction={mapAction} mode="Places" places={visiblePlaces} notes={[]} zones={[]} selectedZoneId={null} zoneDraft={null} categories={presentCategories} hiddenCategoryIds={hiddenCategoryIds} notesVisible={false} showNotesOption={false} geolocate travellerLayout clientT={t} clientTranslateCategoryName={translateCategoryName} onUserLocation={setClientPosition} onToggleCategory={toggleCategory} onToggleNotes={noop} onShowAll={() => setHiddenCategoryIds([])} onHideAll={() => { setHiddenCategoryIds(presentCategories.map((category) => category.id)); setSelected(null); }} picking={false} draftKind={null} draftLocation={null} editingRecord={null} editingCategory={null} selectedRecord={selected} onPickLocation={noop} onMoveDraftLocation={noop} onSelectRecord={(record) => { setQuery(''); setImmersiveMap(false); selectPlace(data.places.find((place) => place.id === record.id)); }} onDeselectRecord={() => { if (sheetMode !== 'category') selectPlace(null); }} onEmptyMapClick={({ hadSelectedRecord }) => { if (hadSelectedRecord || sheetMode === 'category') setDetailSnap('peek'); else setImmersiveMap((current) => !current); }} onSelectZone={noop} onDeselectZone={noop} onZoneBoundsChange={noop} onZoneDrawingChange={noop} onViewportChange={setViewport} />
+      <MapView mapAction={mapAction} mode="Places" places={visiblePlaces} notes={[]} zones={[]} selectedZoneId={null} zoneDraft={null} categories={presentCategories} hiddenCategoryIds={hiddenCategoryIds} notesVisible={false} showNotesOption={false} geolocate travellerLayout clientT={t} clientTranslateCategoryName={translateCategoryName} onUserLocation={setClientPosition} onToggleCategory={toggleCategory} onToggleNotes={noop} onShowAll={() => setHiddenCategoryIds([])} onHideAll={() => { setHiddenCategoryIds(presentCategories.map((category) => category.id)); setSelected(null); }} picking={false} draftKind={null} draftLocation={null} editingRecord={null} editingCategory={null} selectedRecord={selected} onPickLocation={noop} onMoveDraftLocation={noop} onSelectRecord={(record) => { setQuery(''); setImmersiveMap(false); selectPlace(clientPlaces.find((place) => place.id === record.id)); }} onDeselectRecord={() => { if (sheetMode !== 'category') selectPlace(null); }} onEmptyMapClick={({ hadSelectedRecord }) => { if (hadSelectedRecord || sheetMode === 'category') setDetailSnap('peek'); else setImmersiveMap((current) => !current); }} onSelectZone={noop} onDeselectZone={noop} onZoneBoundsChange={noop} onZoneDrawingChange={noop} onViewportChange={setViewport} />
       <div className="traveller-map-attribution">© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a> · <a href="https://maplibre.org/" target="_blank" rel="noreferrer">MapLibre</a></div>
       <div className="traveller-map-category-buttons" aria-label="Place categories">
         {presentCategoryGroups.map((group) => <button key={group.id} className={(isDesktop ? filteredCategoryId === group.id : activeCategoryId === group.id) ? 'active' : ''} type="button" onClick={(event) => openCategory(group, event)}>

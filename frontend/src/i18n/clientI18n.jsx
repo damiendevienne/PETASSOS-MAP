@@ -5,6 +5,7 @@ import de from './de.json';
 import it from './it.json';
 
 const dictionaries = { en, fr, de, it };
+const PLACE_LANGUAGES = ['en', 'fr', 'de', 'it'];
 const ClientI18nContext = createContext(null);
 
 function readLanguage() {
@@ -15,6 +16,24 @@ function readLanguage() {
 
 function lookup(dictionary, key) {
   return key.split('.').reduce((value, part) => value?.[part], dictionary) ?? key;
+}
+
+export function localizePlace(place, language) {
+  const translations = place?.translations || {};
+  const candidates = [language, 'en', ...PLACE_LANGUAGES].filter((item, index, list) => list.indexOf(item) === index);
+  const choose = (field, legacyValue = '') => candidates
+    .map((item) => translations[item]?.[field]?.trim())
+    .find(Boolean) || legacyValue || '';
+  const localized = {
+    name: choose('name', place?.name),
+    description: choose('description', place?.description),
+    practical_info: choose('practical_info', place?.practical_info),
+  };
+  if (!localized.name && !localized.description && !localized.practical_info) return place;
+  return {
+    ...place,
+    ...localized,
+  };
 }
 
 export function ClientI18nProvider({ children }) {
