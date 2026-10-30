@@ -32,6 +32,42 @@ setWorkerUrl(workerUrl);
 
 const LOCAL_STYLES = { petassos: petassosStyle, bright: brightStyle, sketch: sketchStyle, hiking: hikingStyle };
 
+function revealRecordOnMap(map, record) {
+  const { clientWidth: mapWidth } = map.getContainer();
+  const markerPoint = map.project([record.longitude, record.latitude]);
+  const mapRect = map.getContainer().getBoundingClientRect();
+  const travellerPage = map.getContainer().closest('.traveller-page');
+  const historyRect = travellerPage?.querySelector('.traveller-map-info')?.getBoundingClientRect();
+  const mainRect = map.getContainer().closest('.traveller-main')?.getBoundingClientRect();
+  const halfPanelHeight = (window.innerHeight * 0.5) - 32;
+  const halfPanelTop = mainRect ? mainRect.bottom - halfPanelHeight : null;
+  const markerPageY = mapRect.top + markerPoint.y;
+  const distances = {
+    left: markerPoint.x,
+    right: mapWidth - markerPoint.x,
+    top: historyRect ? markerPageY - historyRect.bottom : null,
+    bottom: halfPanelTop === null ? null : halfPanelTop - markerPageY,
+  };
+  console.log('[Map marker] distances aux bords', {
+    left: Math.round(distances.left),
+    right: Math.round(distances.right),
+    'distance au bas de History': distances.top === null ? null : Math.round(distances.top),
+    'distance au haut du panel 50%': distances.bottom === null ? null : Math.round(distances.bottom),
+  });
+  const horizontalEdgeThreshold = mapWidth * 0.1;
+  const verticalEdgeThreshold = window.innerHeight * 0.1;
+  const tooCloseToEdge = distances.left < horizontalEdgeThreshold ||
+    distances.right < horizontalEdgeThreshold ||
+    (distances.top !== null && distances.top < verticalEdgeThreshold) ||
+    (distances.bottom !== null && distances.bottom < verticalEdgeThreshold);
+  if (tooCloseToEdge && historyRect && halfPanelTop !== null) {
+    map.panBy([
+      distances.left - ((distances.left + distances.right) / 2),
+      distances.top - ((distances.top + distances.bottom) / 2),
+    ], { duration: 500 });
+  }
+}
+
 export default function MapView({ mapAction, mode, places, notes, zones, selectedZoneId, zoneDraft, zoneBoundsLocked = false, categories, hiddenCategoryIds, notesVisible, onToggleCategory, onToggleNotes, onShowAll, onHideAll, picking, draftKind, draftLocation, editingRecord, editingCategory, selectedRecord, onPickLocation, onMoveDraftLocation, onSelectRecord, onDeselectRecord, onSelectZone, onDeselectZone, onZoneBoundsChange, onZoneDrawingChange, onViewportChange, onEmptyMapClick, onUserLocation, sharing = false, showNotesOption = true, geolocate = true, travellerLayout = false }) {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
@@ -221,7 +257,9 @@ export default function MapView({ mapAction, mode, places, notes, zones, selecte
     if (!map || !mapReady || !mapAction) return;
     const { clientWidth: width, clientHeight: height } = map.getContainer();
     const mobile = width <= 700;
-    if (mapAction.type === 'focus') {
+    if (mapAction.type === 'reveal') {
+      revealRecordOnMap(map, mapAction.record);
+    } else if (mapAction.type === 'focus') {
       const { longitude, latitude } = mapAction.record;
       map.easeTo({
         center: [longitude, latitude],
@@ -368,7 +406,7 @@ export default function MapView({ mapAction, mode, places, notes, zones, selecte
         });
       };
       map.on('load', () => { updateViewport(); setMapReady(true); });
-      map.on('moveend', updateViewport);
+      map.on('move', updateViewport);
       map.on('mousemove', (event) => {
         if (zoneAnchorRef.current) {
           const bounds = rectangleBounds(zoneAnchorRef.current, event.lngLat);
@@ -435,43 +473,6 @@ export default function MapView({ mapAction, mode, places, notes, zones, selecte
           ? map.queryRenderedFeatures(event.point, { layers: ['admin-record-icons'] })[0]
           : null;
         if (feature) {
-          window.requestAnimationFrame(() => {
-            const markerPoint = feature.geometry?.coordinates
-              ? map.project(feature.geometry.coordinates)
-              : event.point;
-            const mapWidth = map.getContainer().clientWidth;
-            const mapRect = map.getContainer().getBoundingClientRect();
-            const travellerPage = map.getContainer().closest('.traveller-page');
-            const historyRect = travellerPage?.querySelector('.traveller-map-info')?.getBoundingClientRect();
-            const mainRect = map.getContainer().closest('.traveller-main')?.getBoundingClientRect();
-            const halfPanelHeight = (window.innerHeight * 0.5) - 32;
-            const halfPanelTop = mainRect ? mainRect.bottom - halfPanelHeight : null;
-            const markerPageY = mapRect.top + markerPoint.y;
-            const distances = {
-              left: markerPoint.x,
-              right: mapWidth - markerPoint.x,
-              top: historyRect ? markerPageY - historyRect.bottom : null,
-              bottom: halfPanelTop === null ? null : halfPanelTop - markerPageY,
-            };
-            console.log('[Map marker] distances aux bords', {
-              left: Math.round(distances.left),
-              right: Math.round(distances.right),
-              'distance au bas de History': distances.top === null ? null : Math.round(distances.top),
-              'distance au haut du panel 50%': distances.bottom === null ? null : Math.round(distances.bottom),
-            });
-            const horizontalEdgeThreshold = mapWidth * 0.1;
-            const verticalEdgeThreshold = window.innerHeight * 0.1;
-            const tooCloseToEdge = distances.left < horizontalEdgeThreshold ||
-              distances.right < horizontalEdgeThreshold ||
-              (distances.top !== null && distances.top < verticalEdgeThreshold) ||
-              (distances.bottom !== null && distances.bottom < verticalEdgeThreshold);
-            if (tooCloseToEdge && historyRect && halfPanelTop !== null) {
-              map.panBy([
-                distances.left - ((distances.left + distances.right) / 2),
-                distances.top - ((distances.top + distances.bottom) / 2),
-              ], { duration: 500 });
-            }
-          });
           onSelectRecordRef.current({ kind: feature.properties.kind, id: Number(feature.properties.id) });
           return;
         }

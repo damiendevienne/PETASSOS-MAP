@@ -9,6 +9,7 @@ import RecordCard, { recordInViewport } from './RecordCard.jsx';
 import ArchivePanel from './ArchivePanel.jsx';
 import MobileSheetHandle from './MobileSheetHandle.jsx';
 import RecordForm from './RecordForm.jsx';
+import CsvImportDialog from './CsvImportDialog.jsx';
 import { api } from './api.js';
 import { ADMIN_COLLECTIONS, COLLECTIONS, MODE_CONFIG, MODES, RECORD_KINDS, collectionForKind, modeForKind } from './constants.js';
 
@@ -232,6 +233,7 @@ function AdminPage({ onLogout, logoutError, role }) {
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [archiveItems, setArchiveItems] = useState({ places: [], notes: [], zones: [] });
   const [archiveError, setArchiveError] = useState('');
+  const [csvImportOpen, setCsvImportOpen] = useState(false);
   const [selectedZoneId, setSelectedZoneId] = useState(null);
   const [zoneDraft, setZoneDraft] = useState(null);
   const [zoneDrawing, setZoneDrawing] = useState(false);
@@ -697,7 +699,7 @@ function AdminPage({ onLogout, logoutError, role }) {
           discardActionRef.current = logOut;
           setConfirmation({ title: 'Discard changes to this shared map?', message: 'Your unfinished changes will be lost.', action: 'Discard', cancel: 'Keep editing' });
         } else logOut();
-      }} logoutError={logoutError} role={role} sharing={sharing} onShare={() => enterSharing('create')} onSharedMaps={() => sharing ? changeSharingView('list') : enterSharing('list')} archiveOpen={archiveOpen} onArchive={() => archiveOpen ? setArchiveOpen(false) : openArchive()} onBack={exitSharing} sketchTheme={sketchTheme} onToggleSketchTheme={() => setSketchTheme((current) => !current)} />
+      }} logoutError={logoutError} role={role} sharing={sharing} onShare={() => enterSharing('create')} onSharedMaps={() => sharing ? changeSharingView('list') : enterSharing('list')} archiveOpen={archiveOpen} onArchive={() => archiveOpen ? setArchiveOpen(false) : openArchive()} onBack={exitSharing} onImportCsv={() => setCsvImportOpen(true)} sketchTheme={sketchTheme} onToggleSketchTheme={() => setSketchTheme((current) => !current)} />
       <main className={`admin-main${sharing ? ' sharing-mode' : ''}`}>
         <MapView
           sharing={sharing}
@@ -787,6 +789,7 @@ function AdminPage({ onLogout, logoutError, role }) {
         /></div>
         {sharing && <SharingPanel view={sharingView} editingMap={editingSharedMap} zones={zones} categories={categories} places={places} role={role} zoneDraft={shareZoneDraft} setZoneDraft={setShareZoneDraft} zoneDrawing={shareZoneDrawing} mapZoneToggle={mapZoneToggle} onZoneCreated={(zone) => setZones((current) => [...current, zone].sort((a, b) => a.name.localeCompare(b.name)))} onPreviewChange={updateSharePreview} onDirtyChange={setSharingDirty} onChangeView={changeSharingView} onClose={exitSharing} onCancelZone={cancelShareZone} onConfirm={(details, action) => { discardActionRef.current = action; setConfirmation(details); }} />}
       </main>
+      <CsvImportDialog open={csvImportOpen} onClose={() => setCsvImportOpen(false)} onImported={() => { refreshCollection(COLLECTIONS.PLACES).catch(() => setLoadError('Places could not be refreshed after import.')); setMode(MODES.PLACES); }} />
       <dialog
         className="discard-dialog"
         ref={discardDialogRef}

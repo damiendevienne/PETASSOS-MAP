@@ -90,6 +90,18 @@
   color: #a1263f;
   font-size: 13px;
 }
+.csv-import-overlay { position: fixed; z-index: 30; inset: 0; display: grid; place-items: center; padding: 20px; background: #10263a66; }
+.csv-import-dialog { width: min(560px, 100%); padding: 24px; border: 1px solid #d9e3eb; border-radius: 14px; background: #fff; box-shadow: 0 18px 50px #10263a40; }
+.csv-import-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.csv-import-heading h2 { margin: 0; color: #233b59; font-size: 20px; }
+.csv-import-heading p, .csv-import-hint { margin: 6px 0 18px; color: #647a8e; font-size: 12px; line-height: 1.45; }
+.csv-import-heading > button { width: 30px; height: 30px; border: 0; border-radius: 6px; background: transparent; color: #647a8e; font-size: 24px; line-height: 1; }
+.csv-import-heading > button:hover { background: #edf4fb; }
+.csv-import-dialog form { display: grid; gap: 10px; }
+.csv-import-dialog input[type="file"] { width: 100%; padding: 9px; border: 1px solid #c8d4df; border-radius: 7px; background: #f8fbfd; }
+.csv-import-result { padding: 10px 12px; border-radius: 8px; background: #edf7f0; color: #267a64; font-size: 13px; }
+.csv-import-result ul { margin: 8px 0 0; padding-left: 18px; color: #a1263f; font-size: 12px; }
+.csv-import-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
 
 .admin-main { position: relative; flex: 1; min-height: 0; overflow: hidden; }
 .admin-panel-hidden .work-panel { visibility: hidden; pointer-events: none; }

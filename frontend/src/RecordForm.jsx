@@ -39,6 +39,7 @@ export default function RecordForm({ kind, record, location, categories, onCateg
   const selectedCategory = categories.find((category) => category.id === Number(categoryId));
   const selectedGroup = groups.find((group) => group.id === (selectedCategory?.parent_id ?? selectedCategory?.id));
   const [description, setDescription] = useState(record?.description ?? '');
+  const [practicalInfo, setPracticalInfo] = useState(record?.practical_info ?? '');
   const [author, setAuthor] = useState(record?.author ?? '');
   const [linkUrl, setLinkUrl] = useState(record?.link_url ?? '');
   const [published, setPublished] = useState(isNote ? false : Boolean(record?.published ?? true));
@@ -73,11 +74,11 @@ export default function RecordForm({ kind, record, location, categories, onCateg
   ));
   const isDirty = record ? (
     name !== record.name || (!isNote && Number(categoryId) !== record.category_id) ||
-    description !== (record.description ?? '') || author !== (record.author ?? '') ||
+    description !== (record.description ?? '') || practicalInfo !== (record.practical_info ?? '') || author !== (record.author ?? '') ||
     linkUrl !== (record.link_url ?? '') || published !== Boolean(record.published) ||
     location.latitude !== record.latitude || location.longitude !== record.longitude
   ) : (
-    name !== '' || description !== '' || author !== '' || linkUrl !== '' || (!isNote && !published) ||
+    name !== '' || description !== '' || practicalInfo !== '' || author !== '' || linkUrl !== '' || (!isNote && !published) ||
     (!isNote && categoryId !== initialCategoryIdRef.current) ||
     location.latitude !== initialLocationRef.current.latitude || location.longitude !== initialLocationRef.current.longitude
   );
@@ -116,7 +117,7 @@ export default function RecordForm({ kind, record, location, categories, onCateg
         return { new_index: newFiles.length - 1, caption: image.caption };
       });
       await onSave({
-        name, category_id: isNote ? null : Number(categoryId), description, author,
+        name, category_id: isNote ? null : Number(categoryId), description, practical_info: practicalInfo, author,
         link_url: linkUrl.trim() || null, published: isNote ? false : published,
         latitude: location.latitude, longitude: location.longitude,
       }, { manifest, newFiles, dirty: imagesDirty });
@@ -146,6 +147,10 @@ export default function RecordForm({ kind, record, location, categories, onCateg
       </>}
       <label htmlFor="place-description">Description <span className="optional-label">(optional)</span></label>
       <textarea id="place-description" value={description} onChange={(event) => setDescription(event.target.value)} rows="4" />
+      {!isNote && <>
+        <label htmlFor="place-practical-info">Practical information <span className="optional-label">(optional)</span></label>
+        <textarea id="place-practical-info" placeholder="Duration, format, departure point, inclusions…" value={practicalInfo} onChange={(event) => setPracticalInfo(event.target.value)} rows="3" />
+      </>}
       <div className="coordinate-fields">
         <label htmlFor="place-latitude">Latitude *<input id="place-latitude" type="text" value={location.latitude.toFixed(5)} disabled /></label>
         <label htmlFor="place-longitude">Longitude *<input id="place-longitude" type="text" value={location.longitude.toFixed(5)} disabled /></label>

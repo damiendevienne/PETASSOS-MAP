@@ -389,7 +389,12 @@ def _migration_20(connection: sqlite3.Connection) -> None:
     connection.execute("UPDATE categories SET color = '#8A4F27' WHERE name = 'Hotels'")
 
 
-MIGRATIONS = (_migration_1, _migration_2, _migration_3, _migration_4, _migration_5, _migration_6, _migration_7, _migration_8, _migration_9, _migration_10, _migration_11, _migration_12, _migration_13, _migration_14, _migration_15, _migration_16, _migration_17, _migration_18, _migration_19, _migration_20)
+def _migration_21(connection: sqlite3.Connection) -> None:
+    """Store one free-form practical-information block for each place."""
+    connection.execute("ALTER TABLE places ADD COLUMN practical_info TEXT NOT NULL DEFAULT ''")
+
+
+MIGRATIONS = (_migration_1, _migration_2, _migration_3, _migration_4, _migration_5, _migration_6, _migration_7, _migration_8, _migration_9, _migration_10, _migration_11, _migration_12, _migration_13, _migration_14, _migration_15, _migration_16, _migration_17, _migration_18, _migration_19, _migration_20, _migration_21)
 
 
 def initialize_database(path: Path | None = None) -> Path:

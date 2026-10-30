@@ -1,9 +1,11 @@
 """FastAPI entry point for the Petassos Travel Map."""
 
+import csv
+import io
 from contextlib import asynccontextmanager
 from contextlib import closing
 
-from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, FastAPI, File, HTTPException, Request, Response, UploadFile
 from pydantic import AnyHttpUrl, BaseModel, Field
 
 if __package__:
@@ -109,6 +111,7 @@ class NewRecord(BaseModel):
     latitude: float = Field(ge=-90, le=90)
     longitude: float = Field(ge=-180, le=180)
     description: str = ""
+    practical_info: str = ""
     author: str = ""
     link_url: AnyHttpUrl | None = None
     published: bool = False
@@ -137,7 +140,7 @@ def admin_categories() -> list[dict]:
 def _records(kind: str, archived: bool = False) -> list[dict]:
     with closing(connect_database()) as connection:
         rows = connection.execute(
-            "SELECT places.id, places.kind, places.name, places.description, places.author, places.link_url, "
+            "SELECT places.id, places.kind, places.name, places.description, places.practical_info, places.author, places.link_url, "
             "places.latitude, places.longitude, places.published, places.category_id, places.archived_at, "
             "categories.name AS category_name, parent.name AS category_parent_name, "
             "COALESCE(parent.color, categories.color) AS category_color, "
@@ -172,27 +175,27 @@ def _save_record(kind: str, record: NewRecord, record_id: int | None = None) -> 
         elif record.category_id is not None or record.published:
             raise HTTPException(status_code=422, detail="Notes cannot have a category or be published")
         values = (
-            record.category_id, name, record.description.strip(), record.author.strip(),
+            record.category_id, name, record.description.strip(), record.practical_info.strip(), record.author.strip(),
             str(record.link_url) if record.link_url else None,
             record.latitude, record.longitude, int(record.published),
         )
         if record_id is None:
             cursor = connection.execute(
                 "INSERT INTO places "
-                "(kind, category_id, name, description, author, link_url, latitude, longitude, published) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "(kind, category_id, name, description, practical_info, author, link_url, latitude, longitude, published) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (kind, *values),
             )
             record_id = cursor.lastrowid
         else:
             connection.execute(
-                "UPDATE places SET category_id = ?, name = ?, description = ?, author = ?, link_url = ?, "
+                "UPDATE places SET category_id = ?, name = ?, description = ?, practical_info = ?, author = ?, link_url = ?, "
                 "latitude = ?, longitude = ?, published = ?, "
                 "updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?",
                 (*values, record_id),
             )
         row = connection.execute(
-            "SELECT places.id, places.kind, places.name, places.description, places.author, places.link_url, "
+            "SELECT places.id, places.kind, places.name, places.description, places.practical_info, places.author, places.link_url, "
             "places.latitude, places.longitude, places.published, places.category_id, places.archived_at, "
             "categories.name AS category_name, parent.name AS category_parent_name, "
             "COALESCE(parent.color, categories.color) AS category_color, "
@@ -245,6 +248,102 @@ def admin_places(archived: bool = False) -> list[dict]:
 @admin_router.post("/places", status_code=201)
 def admin_create_place(place: NewRecord) -> dict:
     return _save_record("PLACE", place)
+
+
+def _import_bool(value: str, default: bool = True) -> bool:
+    normalized = value.strip().casefold()
+    if not normalized:
+        return default
+    if normalized in {"1", "true", "yes", "y", "oui"}:
+        return True
+    if normalized in {"0", "false", "no", "n", "non"}:
+        return False
+    raise ValueError("published must be true or false")
+
+
+def _find_import_category(connection, category_name: str, subcategory_name: str):
+    category_name = category_name.strip()
+    subcategory_name = subcategory_name.strip()
+    if subcategory_name:
+        row = connection.execute(
+            "SELECT child.id FROM categories child "
+            "LEFT JOIN categories parent ON parent.id = child.parent_id "
+            "WHERE child.parent_id IS NOT NULL AND child.name = ? "
+            "AND (parent.name = ? OR ? = '')",
+            (subcategory_name, category_name, category_name),
+        ).fetchone()
+        if row is not None:
+            return row["id"]
+        row = connection.execute(
+            "SELECT id FROM categories WHERE parent_id IS NOT NULL AND name = ?",
+            (subcategory_name,),
+        ).fetchone()
+        if row is not None:
+            return row["id"]
+        raise ValueError(f"subcategory not found: {subcategory_name}")
+    row = connection.execute(
+        "SELECT id FROM categories WHERE parent_id IS NOT NULL AND name = ?",
+        (category_name,),
+    ).fetchone()
+    if row is not None:
+        return row["id"]
+    row = connection.execute(
+        "SELECT child.id FROM categories child JOIN categories parent ON parent.id = child.parent_id "
+        "WHERE parent.name = ? ORDER BY child.sort_order, child.id LIMIT 1",
+        (category_name,),
+    ).fetchone()
+    if row is not None:
+        return row["id"]
+    raise ValueError(f"category not found: {category_name}")
+
+
+@admin_router.post("/places/import")
+async def admin_import_places(file: UploadFile = File(...)) -> dict:
+    if not file.filename or not file.filename.lower().endswith(".csv"):
+        raise HTTPException(status_code=422, detail="Choose a CSV file")
+    raw = await file.read()
+    try:
+        text = raw.decode("utf-8-sig")
+        reader = csv.DictReader(io.StringIO(text))
+    except UnicodeDecodeError as error:
+        raise HTTPException(status_code=422, detail="The CSV file must use UTF-8 encoding") from error
+    required = {"name", "description", "practical_info", "category", "subcategory", "author", "link_url", "latitude", "longitude", "published"}
+    headers = {header.strip() for header in (reader.fieldnames or []) if header}
+    missing = sorted(required - headers)
+    if missing:
+        raise HTTPException(status_code=422, detail=f"Missing CSV columns: {', '.join(missing)}")
+
+    created = []
+    errors = []
+    with closing(connect_database()) as connection, connection:
+        for line_number, row in enumerate(reader, start=2):
+            try:
+                name = (row.get("name") or "").strip()
+                if not name:
+                    raise ValueError("name is required")
+                latitude = float((row.get("latitude") or "").strip())
+                longitude = float((row.get("longitude") or "").strip())
+                if not -90 <= latitude <= 90 or not -180 <= longitude <= 180:
+                    raise ValueError("latitude or longitude is out of range")
+                link_url = (row.get("link_url") or "").strip() or None
+                if link_url and not link_url.lower().startswith(("http://", "https://")):
+                    raise ValueError("link_url must start with http:// or https://")
+                category_id = _find_import_category(connection, row.get("category") or "", row.get("subcategory") or "")
+                published = _import_bool(row.get("published") or "", True)
+                cursor = connection.execute(
+                    "INSERT INTO places "
+                    "(kind, category_id, name, description, practical_info, author, link_url, latitude, longitude, published) "
+                    "VALUES ('PLACE', ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        category_id, name, (row.get("description") or "").strip(),
+                        (row.get("practical_info") or "").strip(), (row.get("author") or "").strip(),
+                        link_url, latitude, longitude, int(published),
+                    ),
+                )
+                created.append({"line": line_number, "id": cursor.lastrowid, "name": name})
+            except (ValueError, TypeError) as error:
+                errors.append({"line": line_number, "name": (row.get("name") or "").strip(), "error": str(error)})
+    return {"created": created, "errors": errors, "created_count": len(created), "error_count": len(errors)}
 
 
 @admin_router.put("/places/{record_id}")

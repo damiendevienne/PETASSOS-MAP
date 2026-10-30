@@ -52,7 +52,7 @@ export function LoginPage({ onLogin }) {
   );
 }
 
-export function AdminHeader({ onLogout, logoutError, role, sharing, onShare, onSharedMaps, archiveOpen, onArchive, onBack, sketchTheme, onToggleSketchTheme }) {
+export function AdminHeader({ onLogout, logoutError, role, sharing, onShare, onSharedMaps, archiveOpen, onArchive, onBack, onImportCsv, sketchTheme, onToggleSketchTheme }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
 
@@ -92,7 +92,7 @@ export function AdminHeader({ onLogout, logoutError, role, sharing, onShare, onS
             <button type="button" role="menuitem" disabled>Manage categories</button>
             <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); onSharedMaps(); }}>Shared maps</button>
             <button type="button" role="menuitemcheckbox" aria-checked={archiveOpen} onClick={() => { setMenuOpen(false); onArchive(); }}>Archive {archiveOpen ? '✓' : ''}</button>
-            <button type="button" role="menuitem" disabled>Import CSV</button>
+            <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); onImportCsv(); }}>Import CSV</button>
             <button type="button" role="menuitemcheckbox" aria-checked={sketchTheme} onClick={() => { setMenuOpen(false); onToggleSketchTheme(); }}>Sketch style {sketchTheme ? '✓' : ''}</button>
             <button className="mobile-share-item" type="button" role="menuitem" onClick={() => { setMenuOpen(false); sharing ? onBack() : onShare(); }}>{sharing ? 'Map administration' : 'Share map with client'}</button>
             <div className="menu-divider" />

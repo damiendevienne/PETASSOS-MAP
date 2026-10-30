@@ -171,7 +171,7 @@ def public_shared_map(token: str) -> dict:
             "ORDER BY zones.name", (map_id,)
         ).fetchall()
         places = connection.execute(
-            "SELECT places.id, places.kind, places.name, places.description, places.author, places.link_url, "
+            "SELECT places.id, places.kind, places.name, places.description, places.practical_info, places.author, places.link_url, "
             "places.latitude, places.longitude, places.category_id, "
             "categories.name AS category_name, parent.name AS category_parent_name, "
             "categories.icon AS category_icon, "

@@ -49,6 +49,7 @@
 .traveller-place-detail-close:hover { background: #e6eff3; color: #233b59; }
 .traveller-place-detail-focus { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%; background: #f2f6f8; color: #526a80; cursor: pointer; }
 .traveller-place-detail-focus:hover { background: #e6eff3; color: #233b59; }
+.traveller-place-detail-focus:disabled { color: #9aabba; cursor: default; }
 .traveller-category-search-button { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%; background: #f2f6f8; color: #526a80; cursor: pointer; }
 .traveller-category-search-button:hover { background: #e6eff3; color: #233b59; }
 .traveller-category-search { display: block; box-sizing: border-box; width: 100%; margin: 18px 0 0; padding: 9px 12px; border: 1px solid #c8d4df; border-radius: 7px; color: #233b59; font: inherit; font-size: 13px; }
@@ -62,6 +63,7 @@
 .traveller-gallery-prev { left: 8px; }
 .traveller-gallery-next { right: 8px; }
 .traveller-place-detail-description { margin: 20px 0 8px; color: #405b74; font-size: 15px; line-height: 1.65; white-space: pre-wrap; }
+.traveller-place-detail-practical-info { margin: 14px 0 0; color: #405b74; font-size: 12px; line-height: 1.5; white-space: pre-wrap; }
 .route-distance { font-size: .9em; font-weight: 700; white-space: nowrap; }
 .traveller-place-detail-author { margin: 0 0 18px; color: #647a8e; font-size: 12px; }
 .traveller-place-detail-actions { display: grid; gap: 8px; margin-top: 22px; }
@@ -120,7 +122,6 @@
 @media (min-width: 701px) {
   .sheet-handle { display: none; }
   .traveller-map-category-buttons { right: 55px; left: 382px; justify-content: center; }
-  .traveller-main .maplibregl-ctrl-attrib.maplibregl-compact-show .maplibregl-ctrl-attrib-inner { display: none; }
 }
 
 @media (max-width: 700px) {

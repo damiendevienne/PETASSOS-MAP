@@ -107,6 +107,27 @@ class AdminAuthTests(unittest.TestCase):
             self.assertEqual(response.json()["link_url"], "https://example.com/place")
             self.assertEqual(client.get("/api/admin/places").json()[0]["id"], response.json()["id"])
 
+    def test_admin_can_import_places_from_csv(self):
+        with TestClient(app) as client:
+            client.post(
+                "/api/admin/login",
+                json={"username": "admin", "password": "a long test password"},
+            )
+            csv_content = (
+                "name,description,practical_info,category,subcategory,author,link_url,latitude,longitude,published\n"
+                "Santorini wine tour,Visit three wineries,3 hours,What to do,Wineries,,https://example.com/wine,36.38,25.43,true\n"
+            )
+            response = client.post(
+                "/api/admin/places/import",
+                files={"file": ("places.csv", csv_content.encode("utf-8"), "text/csv")},
+            )
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json()["created_count"], 1)
+            self.assertEqual(response.json()["error_count"], 0)
+            place = client.get("/api/admin/places").json()[0]
+            self.assertEqual(place["name"], "Santorini wine tour")
+            self.assertEqual(place["practical_info"], "3 hours")
+
     def test_admin_can_create_private_notes(self):
         with TestClient(app) as client:
             self.assertEqual(client.get("/api/admin/notes").status_code, 401)
