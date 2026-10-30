@@ -7,16 +7,17 @@ export function recordInViewport(record, viewport) {
   );
 }
 
-export default function RecordCard({ record, selected, selectedRef, coverUrl, coverAlt = '', showPublication = false, onSelect, onEdit, onFocus, children }) {
+export default function RecordCard({ record, selected, highlighted = selected, selectedRef, coverUrl, coverAlt = '', showPublication = false, distanceKm, onSelect, onEdit, onFocus, children }) {
   const note = record.kind === 'NOTE';
   const markerUrl = note
     ? noteMarkerUrl
     : placeMarkerUrl(record.category_icon, record.category_color, record.category_marker_style);
 
-  return <div className={`place-card-row${selected ? ' expanded' : ''}${note ? ' note-row' : ''}`} ref={selected ? selectedRef : null}>
-    <button className={`place-card${note ? ' note-card' : ''}${selected ? ' selected' : ''}`} type="button" aria-expanded={selected} onClick={onSelect}>
+  return <div className={`place-card-row${selected ? ' expanded' : ''}${note ? ' note-row' : ''}`} ref={highlighted ? selectedRef : null}>
+    <button className={`place-card${note ? ' note-card' : ''}${highlighted ? ' selected' : ''}`} type="button" aria-expanded={selected} onClick={onSelect}>
       <img className="place-card-marker" src={markerUrl} alt="" />
       <span className="place-card-text"><strong>{record.name}</strong><small>{note ? 'Internal note' : record.category_name}</small></span>
+      {distanceKm !== null && distanceKm !== undefined && <small className="place-card-distance">{distanceKm < 10 ? distanceKm.toFixed(1) : Math.round(distanceKm)} km</small>}
       {coverUrl && <img className="place-card-cover" src={coverUrl} alt={coverAlt} loading="lazy" />}
       {showPublication && !note && <span className={`place-card-status ${record.published ? 'published' : 'draft'}`}>{record.published ? 'Published' : 'Draft'}</span>}
     </button>

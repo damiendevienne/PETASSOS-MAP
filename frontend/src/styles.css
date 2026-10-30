@@ -273,6 +273,7 @@ button:disabled { cursor: not-allowed; }
 .place-card-text { display: grid; flex: 1; gap: 3px; min-width: 0; }
 .place-card-text strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .place-card-text small { overflow: hidden; color: #647a8e; text-overflow: ellipsis; white-space: nowrap; }
+.place-card-distance { flex: none; color: #8a98a5; font-size: 11px; white-space: nowrap; }
 .place-card-status { flex: none; padding: 4px 7px; border-radius: 12px; font-size: 11px; font-weight: 700; }
 .place-card-status.published { background: #dcfce7; color: #15803d; }
 .place-card-status.draft { background: #eef1f4; color: #6b7c8e; }

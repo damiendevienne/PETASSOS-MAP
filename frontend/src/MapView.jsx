@@ -32,7 +32,7 @@ setWorkerUrl(workerUrl);
 
 const LOCAL_STYLES = { petassos: petassosStyle, bright: brightStyle, sketch: sketchStyle, hiking: hikingStyle };
 
-export default function MapView({ mapAction, mode, places, notes, zones, selectedZoneId, zoneDraft, zoneBoundsLocked = false, categories, hiddenCategoryIds, notesVisible, onToggleCategory, onToggleNotes, onShowAll, onHideAll, picking, draftKind, draftLocation, editingRecord, editingCategory, selectedRecord, onPickLocation, onMoveDraftLocation, onSelectRecord, onDeselectRecord, onSelectZone, onDeselectZone, onZoneBoundsChange, onZoneDrawingChange, onViewportChange, onEmptyMapClick, sharing = false, showNotesOption = true, geolocate = true }) {
+export default function MapView({ mapAction, mode, places, notes, zones, selectedZoneId, zoneDraft, zoneBoundsLocked = false, categories, hiddenCategoryIds, notesVisible, onToggleCategory, onToggleNotes, onShowAll, onHideAll, picking, draftKind, draftLocation, editingRecord, editingCategory, selectedRecord, onPickLocation, onMoveDraftLocation, onSelectRecord, onDeselectRecord, onSelectZone, onDeselectZone, onZoneBoundsChange, onZoneDrawingChange, onViewportChange, onEmptyMapClick, onUserLocation, sharing = false, showNotesOption = true, geolocate = true, travellerLayout = false }) {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
   const adminCameraRef = useRef(null);
@@ -64,6 +64,7 @@ export default function MapView({ mapAction, mode, places, notes, zones, selecte
   const onZoneBoundsChangeRef = useRef(onZoneBoundsChange);
   const onZoneDrawingChangeRef = useRef(onZoneDrawingChange);
   const onViewportChangeRef = useRef(onViewportChange);
+  const onUserLocationRef = useRef(onUserLocation);
   const geoRequestRef = useRef(null);
   const [selectedStyle, setSelectedStyle] = useState('hiking');
   const [styleMenuOpen, setStyleMenuOpen] = useState(false);
@@ -94,6 +95,7 @@ export default function MapView({ mapAction, mode, places, notes, zones, selecte
   onZoneBoundsChangeRef.current = onZoneBoundsChange;
   onZoneDrawingChangeRef.current = onZoneDrawingChange;
   onViewportChangeRef.current = onViewportChange;
+  onUserLocationRef.current = onUserLocation;
 
   useEffect(() => {
     const map = mapRef.current;
@@ -219,12 +221,25 @@ export default function MapView({ mapAction, mode, places, notes, zones, selecte
     if (!map || !mapReady || !mapAction) return;
     const { clientWidth: width, clientHeight: height } = map.getContainer();
     const mobile = width <= 700;
-    if (mapAction.type === 'focus') {
+    if (mapAction.type === 'reveal') {
+      if (mobile) return;
+      const point = map.project([mapAction.record.longitude, mapAction.record.latitude]);
+      const visibleMapLeft = 720;
+      const visibleMapCenter = [(visibleMapLeft + width) / 2, height / 2];
+      const tolerance = [Math.max(220, width * 0.30), Math.max(160, height * 0.30)];
+      const tooFarFromCenter = Math.abs(point.x - visibleMapCenter[0]) > tolerance[0] ||
+        Math.abs(point.y - visibleMapCenter[1]) > tolerance[1];
+      if (tooFarFromCenter) {
+        map.panBy([point.x - visibleMapCenter[0], point.y - visibleMapCenter[1]], { duration: 500 });
+      }
+    } else if (mapAction.type === 'focus') {
       const { longitude, latitude } = mapAction.record;
       map.easeTo({
         center: [longitude, latitude],
-        zoom: Math.max(map.getZoom(), 10),
-        offset: mobile ? [0, -Math.min(140, height * 0.2)] : [Math.min(170, width * 0.2), 0],
+        zoom: Math.max(map.getZoom(), 16),
+        offset: mobile
+          ? [0, -Math.min(140, height * 0.2)]
+          : travellerLayout ? [360, 0] : [Math.min(170, width * 0.2), 0],
         duration: 650,
       });
     } else if (mapAction.type === 'zone') {
@@ -243,7 +258,16 @@ export default function MapView({ mapAction, mode, places, notes, zones, selecte
         [Math.min(result[0][0], zone.min_lon), Math.min(result[0][1], zone.min_lat)],
         [Math.max(result[1][0], zone.max_lon), Math.max(result[1][1], zone.max_lat)],
       ], [[Infinity, Infinity], [-Infinity, -Infinity]]);
-      map.fitBounds(bounds, { padding: { top: 55, right: 55, bottom: mobile ? Math.min(420, height * 0.6) : 55, left: mobile ? 55 : Math.min(440, width * 0.45) }, maxZoom: 12, duration: 650 });
+      map.fitBounds(bounds, {
+        padding: {
+          top: 32,
+          right: 32,
+          bottom: mobile ? 32 : 32,
+          left: mobile ? 32 : Math.min(380, width * 0.4),
+        },
+        maxZoom: 15,
+        duration: 650,
+      });
     } else if (mapAction.type === 'fit' && mapAction.records.length) {
       const bounds = mapAction.records.reduce((result, record) => [
         [Math.min(result[0][0], record.longitude), Math.min(result[0][1], record.latitude)],
@@ -252,7 +276,7 @@ export default function MapView({ mapAction, mode, places, notes, zones, selecte
       if (mapAction.records.length === 1) {
         map.easeTo({
           center: bounds[0],
-          zoom: 10,
+          zoom: mapAction.category ? 15 : 10,
           offset: mobile ? [0, -Math.min(140, height * 0.2)] : [Math.min(170, width * 0.2), 0],
           duration: 650,
         });
@@ -264,7 +288,7 @@ export default function MapView({ mapAction, mode, places, notes, zones, selecte
             bottom: mobile ? Math.min(420, height * 0.6) : 40,
             left: mobile ? 40 : Math.min(390, width * 0.4),
           },
-          maxZoom: 12,
+          maxZoom: mapAction.category ? 15 : 12,
           duration: 650,
         });
       }
@@ -305,24 +329,33 @@ export default function MapView({ mapAction, mode, places, notes, zones, selecte
         style: LOCAL_STYLES.hiking,
         center: INITIAL_MAP_VIEW.center,
         zoom: INITIAL_MAP_VIEW.zoom,
-        attributionControl: true,
+        attributionControl: { compact: true },
       });
       mapRef.current = map;
       map.on('zoomend', () => console.log('Zoom :', map.getZoom().toFixed(2)));
-      if (window.matchMedia('(max-width: 700px)').matches) {
+      const collapseAttribution = () => {
         const attribution = map.getContainer().querySelector('.maplibregl-ctrl-attrib');
         attribution?.classList.remove('maplibregl-compact-show');
         attribution?.removeAttribute('open');
-      }
+      };
+      collapseAttribution();
+      map.on('load', collapseAttribution);
+      map.on('resize', collapseAttribution);
+      const mobileTravellerControls = travellerLayout && window.matchMedia('(max-width: 700px)').matches;
       map.addControl(new NavigationControl({ showCompass: false }), 'top-right');
       const topRightContainer = map.getContainer().querySelector('.maplibregl-ctrl-top-right');
       customControls = document.createElement('div');
       customControls.className = 'maplibregl-ctrl map-custom-controls';
       topRightContainer?.appendChild(customControls);
       setTopRightControlNode(customControls);
-      if (geolocate) map.addControl(new GeolocateControl({ trackUserLocation: true }), 'bottom-right');
-      map.addControl(new NorthControl(), 'bottom-right');
-      map.addControl(new TiltControl(), 'bottom-right');
+      const secondaryControlPosition = mobileTravellerControls ? 'top-right' : 'bottom-right';
+      if (geolocate) {
+        const geolocateControl = new GeolocateControl({ trackUserLocation: true });
+        geolocateControl.on('geolocate', ({ coords }) => onUserLocationRef.current?.({ latitude: coords.latitude, longitude: coords.longitude }));
+        map.addControl(geolocateControl, secondaryControlPosition);
+      }
+      map.addControl(new NorthControl(), secondaryControlPosition);
+      if (!mobileTravellerControls) map.addControl(new TiltControl(), 'bottom-right');
       const cancelEmptyClickForZoom = () => {
         if (emptyMapClickTimer !== null) {
           window.clearTimeout(emptyMapClickTimer);
@@ -444,7 +477,7 @@ export default function MapView({ mapAction, mode, places, notes, zones, selecte
           if ((event.originalEvent?.detail ?? 1) > 1) return;
           emptyMapClickTimer = window.setTimeout(() => {
             emptyMapClickTimer = null;
-            onDeselectRecordRef.current();
+            if (!hadSelectedRecord) onDeselectRecordRef.current();
             onDeselectZoneRef.current();
             onEmptyMapClickRef.current?.({ hadSelectedRecord });
           }, 150);
