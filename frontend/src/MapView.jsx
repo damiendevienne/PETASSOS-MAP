@@ -7,10 +7,7 @@ import { INITIAL_MAP_VIEW, MAP_STYLE_URL } from './config.js';
 import petassosStyle from './assets/petassos-style.json';
 import brightStyle from './assets/bright-style.json';
 import hikingStyle from './assets/hiking-style.json';
-import sketchStyle from './assets/sketch-map-style.json';
 import seaTextureUrl from './assets/petassos-sea.png';
-import sketchLandUrl from './assets/sketch-land.svg';
-import sketchWaterUrl from './assets/sketch-water.svg';
 import { categoryIconUrl, placeMarkerUrl, noteMarkerUrl } from './markerIcons.js';
 import { searchLocations } from './geocoder.js';
 import { GeoSearch, MapStyleControl, MapVisibilityControl } from './MapControls.jsx';
@@ -30,7 +27,7 @@ import {
 
 setWorkerUrl(workerUrl);
 
-const LOCAL_STYLES = { petassos: petassosStyle, bright: brightStyle, sketch: sketchStyle, hiking: hikingStyle };
+const LOCAL_STYLES = { petassos: petassosStyle, bright: brightStyle, hiking: hikingStyle };
 
 function revealRecordOnMap(map, record) {
   const { clientWidth: mapWidth } = map.getContainer();
@@ -592,19 +589,6 @@ export default function MapView({ mapAction, mode, places, notes, zones, selecte
             }
           } catch {
             setMapError('The sea texture could not load.');
-          }
-        }
-        if (selectedStyleRef.current === 'sketch') {
-          try {
-            const [land, water] = await Promise.all([loadSvg(sketchLandUrl), loadSvg(sketchWaterUrl)]);
-            if (currentLoadId === styleLoadId) {
-              map.addImage('sketch-land', land, { pixelRatio: 2 });
-              map.addImage('sketch-water', water, { pixelRatio: 2 });
-              map.setPaintProperty('background', 'background-pattern', 'sketch-land');
-              map.setPaintProperty('water', 'fill-pattern', 'sketch-water');
-            }
-          } catch {
-            setMapError('The sketch textures could not load.');
           }
         }
         try {

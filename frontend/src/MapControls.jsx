@@ -73,7 +73,7 @@ export function MapStyleControl({ selectedStyle, open, onToggle, onChoose, t }) 
   return <div className="maplibregl-ctrl map-style-control">
     <div className="map-style-picker">
       {open && <div className="map-style-options" id="map-style-options">
-        {['petassos', 'positron', 'bright', 'hiking', 'sketch'].map((style) => (
+        {['petassos', 'positron', 'bright', 'hiking'].map((style) => (
           <button key={style} type="button" aria-pressed={selectedStyle === style} onClick={() => onChoose(style)}>
             {style[0].toUpperCase() + style.slice(1)}
           </button>

@@ -239,7 +239,6 @@ function WorkPanel({ mode, categories, places, searchPlaces, notes, zones, selec
 }
 
 function AdminPage({ onLogout, logoutError, role }) {
-  const [sketchTheme, setSketchTheme] = useState(false);
   const [mode, setMode] = useState(MODES.PLACES);
   const [categories, setCategories] = useState([]);
   const [places, setPlaces] = useState([]);
@@ -708,14 +707,14 @@ function AdminPage({ onLogout, logoutError, role }) {
   }
 
   return (
-    <div className={`admin-page${sketchTheme ? ' sketch-theme' : ''}`} onClickCapture={handleOutsideClick}>
+    <div className="admin-page" onClickCapture={handleOutsideClick}>
       <AdminHeader onLogout={() => {
         const logOut = () => requestDiscard(() => { clearDraft(); onLogout(); });
         if (sharingDirty) {
           discardActionRef.current = logOut;
           setConfirmation({ title: 'Discard changes to this shared map?', message: 'Your unfinished changes will be lost.', action: 'Discard', cancel: 'Keep editing' });
         } else logOut();
-      }} logoutError={logoutError} role={role} sharing={sharing} onShare={() => enterSharing('create')} onSharedMaps={() => sharing ? changeSharingView('list') : enterSharing('list')} archiveOpen={archiveOpen} onArchive={() => archiveOpen ? setArchiveOpen(false) : openArchive()} onBack={exitSharing} onImportCsv={() => setCsvImportOpen(true)} sketchTheme={sketchTheme} onToggleSketchTheme={() => setSketchTheme((current) => !current)} />
+      }} logoutError={logoutError} role={role} sharing={sharing} onShare={() => enterSharing('create')} onSharedMaps={() => sharing ? changeSharingView('list') : enterSharing('list')} archiveOpen={archiveOpen} onArchive={() => archiveOpen ? setArchiveOpen(false) : openArchive()} onBack={exitSharing} onImportCsv={() => setCsvImportOpen(true)} />
       <main className={`admin-main${sharing ? ' sharing-mode' : ''}`}>
         <MapView
           sharing={sharing}
