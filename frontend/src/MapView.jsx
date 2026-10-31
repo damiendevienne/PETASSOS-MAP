@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { GeolocateControl, Map, Marker, NavigationControl, setWorkerUrl } from 'maplibre-gl';
+import { GeolocateControl, Map, Marker, NavigationControl, ScaleControl, setWorkerUrl } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import { INITIAL_MAP_VIEW, MAP_STYLE_URL } from './config.js';
@@ -351,6 +351,7 @@ export default function MapView({ mapAction, mode, places, notes, zones, selecte
     let customControls;
     let hoveredZoneId = null;
     let emptyMapClickTimer = null;
+    let scaleHideTimer = null;
     let ignoreEmptyClickUntil = 0;
     try {
       map = new Map({
@@ -372,6 +373,7 @@ export default function MapView({ mapAction, mode, places, notes, zones, selecte
       map.on('resize', collapseAttribution);
       const mobileTravellerControls = travellerLayout && window.matchMedia('(max-width: 700px)').matches;
       map.addControl(new NavigationControl({ showCompass: false }), 'top-right');
+      map.addControl(new ScaleControl({ maxWidth: 120, unit: 'metric' }), 'bottom-right');
       const topRightContainer = map.getContainer().querySelector('.maplibregl-ctrl-top-right');
       customControls = document.createElement('div');
       customControls.className = 'maplibregl-ctrl map-custom-controls';
@@ -385,6 +387,26 @@ export default function MapView({ mapAction, mode, places, notes, zones, selecte
       }
       map.addControl(new NorthControl(), secondaryControlPosition);
       if (!mobileTravellerControls) map.addControl(new TiltControl(), 'bottom-right');
+      const bottomRightControls = map.getContainer().querySelector('.maplibregl-ctrl-bottom-right');
+      const scaleControl = bottomRightControls?.querySelector('.maplibregl-ctrl-scale');
+      const attributionControl = bottomRightControls?.querySelector('.maplibregl-ctrl-attrib');
+      if (bottomRightControls && scaleControl && attributionControl) {
+        const attributionRow = document.createElement('div');
+        attributionRow.className = 'map-bottom-right-attribution-row';
+        bottomRightControls.appendChild(attributionRow);
+        attributionRow.append(scaleControl, attributionControl);
+      }
+      const showScale = () => {
+        if (scaleHideTimer !== null) window.clearTimeout(scaleHideTimer);
+        scaleControl?.classList.add('map-scale-visible');
+      };
+      const hideScaleLater = () => {
+        if (scaleHideTimer !== null) window.clearTimeout(scaleHideTimer);
+        scaleHideTimer = window.setTimeout(() => scaleControl?.classList.remove('map-scale-visible'), 3000);
+      };
+      scaleControl?.classList.remove('map-scale-visible');
+      map.on('movestart', showScale);
+      map.on('moveend', hideScaleLater);
       const cancelEmptyClickForZoom = () => {
         if (emptyMapClickTimer !== null) {
           window.clearTimeout(emptyMapClickTimer);
@@ -623,6 +645,7 @@ export default function MapView({ mapAction, mode, places, notes, zones, selecte
 
     return () => {
       if (emptyMapClickTimer !== null) window.clearTimeout(emptyMapClickTimer);
+      if (scaleHideTimer !== null) window.clearTimeout(scaleHideTimer);
       geoRequestRef.current?.abort();
       draftMarkerRef.current?.remove();
       draftMarkerRef.current = null;

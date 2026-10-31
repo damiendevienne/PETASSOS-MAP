@@ -14,6 +14,12 @@
   background: #fff;
   box-shadow: 0 2px 12px #213c5410;
 }
+
+.maplibregl-ctrl-bottom-right { display: flex; flex-direction: column; align-items: flex-end; }
+.maplibregl-ctrl-bottom-right > .maplibregl-ctrl { float: none; }
+.map-bottom-right-attribution-row { display: flex; align-items: flex-end; gap: 8px; }
+.maplibregl-ctrl-scale { margin-bottom: 10px; padding: 0 4px 1px; border-width: 0 1px 2px; border-color: #526a80; background: transparent; color: #526a80; font-size: 9px; line-height: 1; opacity: 0; visibility: hidden; transition: opacity .16s ease, visibility .16s ease; }
+.maplibregl-ctrl-scale.map-scale-visible { opacity: 1; visibility: visible; }
 .header-identity, .header-actions { display: flex; align-items: center; min-width: 0; }
 .header-identity { gap: 22px; }
 .header-identity img { width: 168px; height: 59px; object-fit: contain; flex: none; }
@@ -365,6 +371,7 @@
 
 /* Admin mobile layout */
 @media (max-width: 700px) {
+  .admin-page .maplibregl-ctrl-top-right > .maplibregl-ctrl:has(.maplibregl-ctrl-zoom-in) { display: none; }
   .admin-main { --mobile-sheet-height: 74px; }
   .admin-main:has(.work-panel-expanded) { --mobile-sheet-height: min(430px, 68dvh, calc(100dvh - 220px)); }
   .category-options { position: static; max-height: 180px; margin-top: 4px; }
@@ -373,7 +380,8 @@
   .header-context, .share-button { display: none; }
   .admin-menu-trigger { padding: 0 7px; font-size: 14px; }
   .menu-bars { display: flex; }
-  .admin-menu .mobile-share-item { display: block; }
+  .admin-menu .mobile-share-item { display: block; margin: 4px 0; border: 1px solid #b9d9c8; background: #edf7f0; color: #267a64; font-weight: 700; }
+  .admin-menu .mobile-share-item:not(:disabled):hover { background: #ddefe3; }
   .work-panel {
     top: auto;
     right: 0;

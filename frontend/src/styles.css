@@ -185,8 +185,9 @@ button:disabled { cursor: not-allowed; }
 .zone-handle:active { cursor: grabbing; }
 
 .sharing-mode .sharing-panel { z-index: 4; top: calc(var(--sharing-map-inset) + var(--sharing-panel-gap)); bottom: calc(var(--sharing-map-inset) + var(--sharing-panel-gap)); left: calc(var(--sharing-map-inset) + var(--sharing-panel-gap)); width: min(420px, calc(100% - 104px)); border: 1px solid #b9d9c8; background: #f8f8f4; box-shadow: 0 12px 36px #153d2d70; }
-.sharing-heading { padding: 16px 20px; background: var(--share-green); }
+.sharing-heading { display: flex; align-items: center; gap: 8px; padding: 16px 20px; background: var(--share-green); }
 .sharing-heading h2 { margin: 0; color: #fff; font-size: 18px; font-weight: 800; letter-spacing: .08em; }
+.sharing-collapse-button { display: none; }
 .sharing-tabs .mode-tab { font-size: 13px; }
 .sharing-tabs .mode-tab { background: #eaf3ed; color: #557769; }
 .sharing-tabs .mode-tab:hover { background: #ddefe3; }
@@ -284,8 +285,13 @@ button:disabled { cursor: not-allowed; }
   .maplibregl-ctrl-bottom-right { right: 12px; bottom: calc(var(--mobile-sheet-height, 0px) + 6px); }
   .sharing-mode { --sharing-map-inset: 12px; --sharing-panel-gap: 12px; }
   .sharing-mode .map-area { inset: var(--sharing-map-inset); border-radius: 12px; }
-  .sharing-mode .sharing-panel { top: auto; right: calc(var(--sharing-map-inset) + var(--sharing-panel-gap)); bottom: calc(var(--sharing-map-inset) + var(--sharing-panel-gap)); left: calc(var(--sharing-map-inset) + var(--sharing-panel-gap)); width: calc(100% - 48px); height: min(76dvh, calc(100dvh - 145px)); }
+  .sharing-mode .sharing-panel { top: auto; right: calc(var(--sharing-map-inset) + var(--sharing-panel-gap)); bottom: calc(var(--sharing-map-inset) + var(--sharing-panel-gap)); left: calc(var(--sharing-map-inset) + var(--sharing-panel-gap)); width: calc(100% - 48px); height: min(76dvh, calc(100dvh - 145px)); transition: height .22s ease; }
+  .sharing-mode .sharing-panel.sharing-panel-collapsed { height: 45dvh; }
   .sharing-panel .sharing-heading { padding: 9px 14px; }
+  .sharing-collapse-button { display: grid; place-items: center; width: 25px; height: 25px; flex: none; margin: 0; padding: 0; border: 0; border-radius: 5px; background: transparent; color: #fff; cursor: pointer; }
+  .sharing-collapse-button:hover { background: #ffffff26; }
+  .sharing-collapse-button svg { width: 18px; height: 18px; transition: transform .22s ease; }
+  .sharing-panel-collapsed .sharing-collapse-button svg { transform: rotate(180deg); }
   .sharing-panel .mode-tab { height: 46px; }
   .sharing-content { padding: 15px; }
   .geo-search { top: 14px; right: auto; left: 12px; z-index: 7; width: calc(100% - 104px); margin: 0; }

@@ -94,7 +94,7 @@ export function AdminHeader({ onLogout, logoutError, role, sharing, onShare, onS
             <button type="button" role="menuitemcheckbox" aria-checked={archiveOpen} onClick={() => { setMenuOpen(false); onArchive(); }}>Archive {archiveOpen ? '✓' : ''}</button>
             <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); onImportCsv(); }}>Import CSV</button>
             <button type="button" role="menuitemcheckbox" aria-checked={sketchTheme} onClick={() => { setMenuOpen(false); onToggleSketchTheme(); }}>Sketch style {sketchTheme ? '✓' : ''}</button>
-            <button className="mobile-share-item" type="button" role="menuitem" onClick={() => { setMenuOpen(false); sharing ? onBack() : onShare(); }}>{sharing ? 'Map administration' : 'Share map with client'}</button>
+            <button className="mobile-share-item" type="button" role="menuitem" onClick={() => { setMenuOpen(false); sharing ? onBack() : onShare(); }}>{sharing ? 'Map administration' : 'Share map with clients'}</button>
             <div className="menu-divider" />
             <button type="button" role="menuitem" onClick={onLogout}>Log out</button>
           </div>}

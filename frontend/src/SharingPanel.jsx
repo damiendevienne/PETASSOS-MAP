@@ -77,6 +77,7 @@ export default function SharingPanel({ view, editingMap, zones, categories, plac
   const [error, setError] = useState('');
   const [zoneError, setZoneError] = useState('');
   const [copiedId, setCopiedId] = useState(null);
+  const [sharingCollapsed, setSharingCollapsed] = useState(false);
   const copyResetTimerRef = useRef(null);
   const [version, setVersion] = useState(0);
   const [initial, setInitial] = useState('');
@@ -215,8 +216,21 @@ export default function SharingPanel({ view, editingMap, zones, categories, plac
     } catch { setError('Could not copy the link.'); }
   }
 
-  return <aside className="work-panel sharing-panel">
-    <div className="sharing-heading"><h2>SHARING WORKSPACE</h2></div>
+  return <aside className={`work-panel sharing-panel${sharingCollapsed ? ' sharing-panel-collapsed' : ''}`}>
+    <div className="sharing-heading">
+      <button
+        className="sharing-collapse-button"
+        type="button"
+        aria-label={sharingCollapsed ? 'Expand sharing workspace' : 'Collapse sharing workspace'}
+        aria-expanded={!sharingCollapsed}
+        onClick={() => setSharingCollapsed((collapsed) => !collapsed)}
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="m6 9 6 6 6-6" />
+        </svg>
+      </button>
+      <h2>SHARING WORKSPACE</h2>
+    </div>
     <div className="mode-tabs sharing-tabs" role="tablist" aria-label="Sharing workspace">
       <button className={view !== 'list' ? 'mode-tab active' : 'mode-tab'} type="button" role="tab" aria-selected={view !== 'list'} onClick={() => onChangeView('create')}>{view === 'edit' ? 'Edit shared map' : 'Create a shared map'}</button>
       <button className={view === 'list' ? 'mode-tab active' : 'mode-tab'} type="button" role="tab" aria-selected={view === 'list'} onClick={() => onChangeView('list')}>Shared maps</button>
